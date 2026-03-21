@@ -430,14 +430,46 @@ const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
 
 // ═══════════════════════════════════
-//  GEO JSON
+//  GEO JSON (다중 URL 자동 fallback)
 // ═══════════════════════════════════
-const GEO_BASE='https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2012/json/';
+// 1순위: jsDelivr CDN (안정적), 2순위: raw.githubusercontent.com
+// kostat/2013 → gadm 순서로 시도
+const GEO_CANDIDATES = {
+  sido: [
+    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/kostat/2013/json/skorea-provinces-geo.json',
+    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-provinces-geo.json',
+    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea-provinces-geo.json',
+    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-provinces-geo.json',
+  ],
+  sigungu: [
+    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/kostat/2013/json/skorea-municipalities-geo.json',
+    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-municipalities-geo.json',
+    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea-municipalities-geo.json',
+    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-municipalities-geo.json',
+  ],
+};
+
+// 데이터셋마다 속성명 다름 → 통합 추출 (kostat: name, gadm: NAME_1)
+const getGeoName = p =>
+  p.name || p.NAME_1 || p.KOR_NM || p.CTP_KOR_NM || p.SIG_KOR_NM || '';
+const getGeoCode = p =>
+  String(p.code || p.id || p.CTPRVN_CD || p.SIG_CD || p.id_1 || p.ID_1 || '');
+
+async function fetchFirstWorking(urls) {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) { console.log('[GeoJSON OK]', url.split('/').pop()); return await res.json(); }
+    } catch(e) { /* try next */ }
+  }
+  throw new Error('모든 GeoJSON URL 실패');
+}
+
 async function loadGeo(){
   try{
     const[sido,sigungu]=await Promise.all([
-      d3.json(GEO_BASE+'skorea-provinces-geo.json'),
-      d3.json(GEO_BASE+'skorea-municipalities-geo.json'),
+      fetchFirstWorking(GEO_CANDIDATES.sido),
+      fetchFirstWorking(GEO_CANDIDATES.sigungu),
     ]);
     ST.sidoGeo=sido;ST.sigunguGeo=sigungu;ST.geoLoaded=true;
     document.getElementById('loading-wrap').style.display='none';
@@ -506,7 +538,7 @@ function renderMap(){
   let features,geoFit;
   if(isDrill&&ST.sigunguGeo){
     const code=SIDO_CODE[ST.selectedSido]||'';
-    const f=ST.sigunguGeo.features.filter(f=>String(f.properties.code??f.properties.id??'').startsWith(code));
+    const f=ST.sigunguGeo.features.filter(f=>getGeoCode(f.properties).startsWith(code));
     features=f;geoFit={type:'FeatureCollection',features:f};
   }else{features=ST.sidoGeo.features;geoFit=ST.sidoGeo;}
   if(!features.length)return;
@@ -524,7 +556,7 @@ function renderMap(){
         const alpha=Math.round((0.48+((i*37+11)%50)/100)*255).toString(16).padStart(2,'0');
         return base+alpha;
       }
-      const nm=normName(d.properties.name);
+      const nm=normName(getGeoName(d.properties));
       const d2=ST.data[nm];
       return d2?pc(d2.winner):'#111a30';
     })
@@ -532,7 +564,7 @@ function renderMap(){
     .style('cursor',isDrill?'default':'pointer')
     .on('mouseover',function(event,d){
       d3.select(this).attr('opacity',.7);
-      const nm=isDrill?ST.selectedSido:normName(d.properties.name);
+      const nm=isDrill?ST.selectedSido:normName(getGeoName(d.properties));
       ST.hoveredName=nm;
       showTooltip(event,isDrill?d.properties.name:nm,nm,isDrill,W);
       if(!isDrill)showDetail(nm);
@@ -551,13 +583,13 @@ function renderMap(){
       .attr('text-anchor','middle').attr('dominant-baseline','middle')
       .attr('font-size',d=>d.properties.name==='경기도'?'12':'10')
       .attr('font-weight','700').attr('fill','rgba(255,255,255,.82)').attr('pointer-events','none')
-      .text(d=>shortSido(d.properties.name));
+      .text(d=>shortSido(getGeoName(d.properties)));
   }else{
     g.selectAll('text').data(features).join('text')
       .attr('transform',d=>{const c=path.centroid(d);return `translate(${c[0]},${c[1]})`;})
       .attr('text-anchor','middle').attr('dominant-baseline','middle')
       .attr('font-size','8').attr('fill','rgba(255,255,255,.6)').attr('pointer-events','none')
-      .text(d=>(d.properties.name||'').replace(/시$|구$|군$/,''));
+      .text(d=>getGeoName(d.properties).replace(/시$|구$|군$/,''));
   }
   document.getElementById('back-btn').style.display=isDrill?'block':'none';
   document.getElementById('map-label').innerHTML=isDrill
