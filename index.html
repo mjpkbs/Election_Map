@@ -429,38 +429,45 @@ let ST={
 const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
 
-// ═══════════════════════════════════
-//  GEO JSON (다중 URL 자동 fallback)
-// ═══════════════════════════════════
-// 1순위: jsDelivr CDN (안정적), 2순위: raw.githubusercontent.com
-// kostat/2013 → gadm 순서로 시도
+// ═══════════════════════════════════════════════════════
+//  GEO JSON
+//  우선순위: ① 레포 내 geo/ 폴더 (SGIS 다운로드 후 커밋)
+//           ② southkorea-maps gadm/kostat (CDN/raw 자동 폴백)
+// ═══════════════════════════════════════════════════════
 const GEO_CANDIDATES = {
   sido: [
-    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/kostat/2013/json/skorea-provinces-geo.json',
+    './geo/sido.json',
     'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-provinces-geo.json',
-    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea-provinces-geo.json',
     'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-provinces-geo.json',
+    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/kostat/2013/json/skorea-provinces-geo.json',
+    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea-provinces-geo.json',
   ],
   sigungu: [
-    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/kostat/2013/json/skorea-municipalities-geo.json',
+    './geo/sigungu.json',
     'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-municipalities-geo.json',
-    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea-municipalities-geo.json',
     'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-municipalities-geo.json',
+    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/kostat/2013/json/skorea-municipalities-geo.json',
+    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea-municipalities-geo.json',
   ],
 };
 
-// 데이터셋마다 속성명 다름 → 통합 추출 (kostat: name, gadm: NAME_1)
+// 소스마다 속성명 다름 → 통합 추출
+// SGIS: adm_nm/adm_cd  |  kostat: name/code  |  gadm: NAME_1/ID_1
 const getGeoName = p =>
-  p.name || p.NAME_1 || p.KOR_NM || p.CTP_KOR_NM || p.SIG_KOR_NM || '';
+  p.name || p.adm_nm || p.NAME_1 || p.CTP_KOR_NM || p.SIG_KOR_NM || p.KOR_NM || '';
 const getGeoCode = p =>
-  String(p.code || p.id || p.CTPRVN_CD || p.SIG_CD || p.id_1 || p.ID_1 || '');
+  String(p.code || p.adm_cd || p.id || p.CTPRVN_CD || p.SIG_CD || p.ID_1 || p.id_1 || '');
 
 async function fetchFirstWorking(urls) {
   for (const url of urls) {
     try {
       const res = await fetch(url);
-      if (res.ok) { console.log('[GeoJSON OK]', url.split('/').pop()); return await res.json(); }
-    } catch(e) { /* try next */ }
+      if (res.ok) {
+        const src = url.startsWith('./') ? '로컬(SGIS)' : new URL(url).hostname;
+        console.log(`[GeoJSON OK] ${url.split('/').pop()} ← ${src}`);
+        return await res.json();
+      }
+    } catch(e) { /* 다음 URL 시도 */ }
   }
   throw new Error('모든 GeoJSON URL 실패');
 }
