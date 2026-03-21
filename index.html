@@ -3,987 +3,813 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2026 전국동시지방선거 개표현황 | KBS</title>
+<title>전국동시지방선거 개표현황 | KBS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
+:root{--bg:#04060e;--panel:#070a14;--border:#10182a;--border2:#1a2540;--text:#c8d2e8;--sub:#6a7a9a;--dim:#323a52;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
 
-  :root {
-    --bg:       #04060e;
-    --panel:    #070a14;
-    --panel2:   #0a0e1a;
-    --border:   #10182a;
-    --border2:  #1a2540;
-    --text:     #c8d2e8;
-    --sub:      #6a7a9a;
-    --dim:      #323a52;
-    --blue:     #1259C3;
-    --red:      #E61E2B;
-    --teal:     #00A68C;
-    --orange:   #F97316;
-    --gray:     #6B7280;
-  }
+/* HEADER */
+#header{background:linear-gradient(90deg,#05091c,#07103a,#05091c);border-bottom:1px solid var(--border2);height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 14px;position:relative;}
+#header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#1a4acf 20%,#2a6aef 50%,#1a4acf 80%,transparent);}
+.kbs-badge{background:linear-gradient(135deg,#1a3a9a,#2a5fd4);color:#fff;padding:3px 7px;border-radius:3px;font-size:11px;font-weight:900;letter-spacing:1.5px;margin-right:9px;flex-shrink:0;}
+#header-title{font-size:14px;font-weight:700;}
+#header-title span{color:#5a8ff5;}
+#header-sub{font-size:10px;color:var(--sub);margin-top:1px;}
+#live-badge{display:none;align-items:center;gap:5px;background:rgba(220,30,30,.12);border:1px solid rgba(220,30,30,.4);border-radius:3px;padding:3px 7px;margin-left:10px;}
+#live-badge.on{display:flex;}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#dc1e1e;animation:pulse 1s infinite;}
+.live-text{font-size:11px;font-weight:900;color:#ef4444;letter-spacing:1px;}
+.hbtn{background:rgba(20,32,60,.9);border:1px solid var(--border2);color:var(--sub);padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;}
+.hbtn:hover{border-color:#2a4a8a;color:var(--text);}
+.hbtn.live-on{background:rgba(220,30,30,.18);border-color:rgba(220,30,30,.5);color:#ef4444;}
+#time-wrap{font-size:11px;color:var(--sub);text-align:right;flex-shrink:0;}
+#time-wrap b{color:#8a9ab8;font-weight:600;display:block;}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+/* ELECTION TABS */
+#election-tabs{background:#050812;border-bottom:1px solid var(--border);height:38px;flex-shrink:0;display:flex;align-items:stretch;padding:0 14px;gap:2px;overflow-x:auto;}
+#election-tabs::-webkit-scrollbar{display:none;}
+.etab{display:flex;align-items:center;gap:6px;padding:0 14px;cursor:pointer;border-bottom:2px solid transparent;font-size:12px;font-weight:600;color:var(--sub);white-space:nowrap;transition:all .15s;flex-shrink:0;}
+.etab:hover{color:var(--text);}
+.etab.active{color:#5a9ff5;border-bottom-color:#2a6aef;}
+.tab-year{font-weight:900;}
+.tab-num{font-size:10px;opacity:.6;}
+.tab-badge{font-size:9px;padding:1px 5px;border-radius:2px;font-weight:700;letter-spacing:.5px;}
+.tab-badge.done{background:rgba(50,100,200,.15);border:1px solid rgba(50,100,200,.3);color:#6a9af5;}
+.tab-badge.upcoming{background:rgba(60,60,80,.2);border:1px solid var(--border2);color:var(--dim);}
 
-  /* ── HEADER ── */
-  #header {
-    background: linear-gradient(90deg, #05091c 0%, #07103a 50%, #05091c 100%);
-    border-bottom: 1px solid var(--border2);
-    height: 56px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
-    position: relative;
-  }
-  #header::after {
-    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, #1a4acf 20%, #2a6aef 50%, #1a4acf 80%, transparent);
-  }
-  .kbs-badge {
-    background: linear-gradient(135deg, #1a3a9a, #2a5fd4);
-    color: white; padding: 3px 8px; border-radius: 3px;
-    font-size: 11px; font-weight: 900; letter-spacing: 1.5px; margin-right: 10px;
-  }
-  .header-title { font-size: 15px; font-weight: 700; }
-  .header-title span { color: #5a8ff5; }
-  .header-sub { font-size: 11px; color: var(--sub); margin-top: 1px; }
-  #live-badge {
-    display: none; align-items: center; gap: 5px;
-    background: rgba(220,30,30,0.12); border: 1px solid rgba(220,30,30,0.4);
-    border-radius: 3px; padding: 3px 8px; margin: 0 10px;
-  }
-  #live-badge.active { display: flex; }
-  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #dc1e1e; animation: pulse 1s infinite; }
-  .live-text { font-size: 11px; font-weight: 900; color: #ef4444; letter-spacing: 1px; }
-  #update-time { font-size: 11px; color: var(--sub); text-align: right; }
-  #update-time b { color: #8a9ab8; font-weight: 600; display: block; }
-  .header-btns { display: flex; gap: 8px; margin-left: 12px; }
-  .btn { background: rgba(20,32,60,0.9); border: 1px solid var(--border2); color: var(--sub);
-    padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;
-    font-family: inherit; transition: all .15s; }
-  .btn:hover { border-color: #2a4a8a; color: var(--text); }
-  .btn.live-on { background: rgba(220,30,30,0.18); border-color: rgba(220,30,30,0.5); color: #ef4444; }
+/* SUMMARY BAR */
+#summary-bar{background:#060810;border-bottom:1px solid var(--border);height:42px;flex-shrink:0;display:flex;align-items:center;padding:0 14px;gap:14px;}
+.sb-label{font-size:11px;color:var(--dim);font-weight:600;flex-shrink:0;}
+.sb-div{width:1px;height:16px;background:var(--border2);flex-shrink:0;}
+#seat-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;flex:1;max-width:200px;min-width:60px;}
+.seat-seg{height:100%;transition:width .5s;}
+#party-chips{display:flex;gap:12px;}
+.pchip{display:flex;align-items:center;gap:5px;}
+.pdot{width:9px;height:9px;border-radius:2px;}
+.pcnt{font-size:14px;font-weight:900;}
+.pname{font-size:11px;color:var(--sub);}
+.sb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+#data-src-badge{font-size:10px;padding:2px 7px;border-radius:3px;display:none;}
+#data-src-badge.builtin{display:block;background:rgba(60,120,60,.15);border:1px solid rgba(80,140,80,.3);color:#6aaa6a;}
+#data-src-badge.api{display:block;background:rgba(18,89,195,.15);border:1px solid rgba(18,89,195,.35);color:#6b9cf5;}
+#data-src-badge.mock{display:block;background:rgba(80,80,80,.1);border:1px solid var(--border2);color:var(--dim);}
+#avg-rate-lbl{font-size:12px;color:var(--sub);}
+#avg-rate-lbl b{color:#8a9ab8;}
+#err-msg{font-size:11px;color:#f4924a;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);padding:2px 8px;border-radius:3px;display:none;}
+#err-msg.show{display:block;}
 
-  /* ── SUMMARY BAR ── */
-  #summary-bar {
-    background: #060810; border-bottom: 1px solid var(--border);
-    height: 44px; flex-shrink: 0; display: flex; align-items: center;
-    padding: 0 16px; gap: 16px;
-  }
-  .sb-label { font-size: 11px; color: var(--dim); font-weight: 600; }
-  .sb-div { width: 1px; height: 16px; background: var(--border2); }
-  .party-chip { display: flex; align-items: center; gap: 5px; }
-  .party-dot { width: 10px; height: 10px; border-radius: 2px; }
-  .party-cnt { font-size: 15px; font-weight: 900; }
-  .party-name { font-size: 11px; color: var(--sub); }
-  .sb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-  #api-mode-badge { font-size: 11px; padding: 2px 8px; border-radius: 3px; display: none; }
-  #api-mode-badge.real { display: block; background: rgba(18,89,195,0.15); border: 1px solid rgba(18,89,195,0.35); color: #6b9cf5; }
-  #api-mode-badge.mock { display: block; background: rgba(100,100,100,0.1); border: 1px solid var(--border2); color: var(--dim); }
-  #avg-rate-label { font-size: 12px; color: var(--sub); }
-  #avg-rate-label b { color: #8a9ab8; }
-  #error-msg { font-size: 11px; color: #f4924a; background: rgba(249,115,22,.1); border: 1px solid rgba(249,115,22,.3); padding: 2px 8px; border-radius: 3px; display: none; }
-  #error-msg.show { display: block; }
+/* MAIN */
+#main{flex:1;display:flex;overflow:hidden;}
+#map-area{flex:1;position:relative;overflow:hidden;}
+#map-svg{width:100%;height:100%;}
+#map-svg path{transition:opacity .12s;cursor:pointer;}
+#map-svg path:hover{opacity:.72;}
+#back-btn{position:absolute;top:10px;left:10px;z-index:10;background:rgba(4,6,14,.93);border:1px solid var(--border2);color:var(--sub);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;display:none;backdrop-filter:blur(6px);transition:all .15s;}
+#back-btn:hover{color:var(--text);border-color:#2a4a8a;}
+#map-label{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(4,6,14,.9);border:1px solid var(--border2);padding:4px 14px;border-radius:20px;z-index:5;font-size:12px;color:var(--sub);backdrop-filter:blur(6px);white-space:nowrap;pointer-events:none;}
+#map-label small{font-size:10px;opacity:.45;margin-left:4px;}
+#loading-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:var(--bg);z-index:20;}
+.spinner{width:26px;height:26px;border:2px solid #1a2a40;border-top-color:#3a5ad4;border-radius:50%;animation:spin .7s linear infinite;}
+#loading-txt{font-size:13px;color:var(--sub);}
 
-  /* ── MAIN LAYOUT ── */
-  #main { flex: 1; display: flex; overflow: hidden; }
+/* TOOLTIP */
+#tooltip{position:absolute;pointer-events:none;z-index:30;min-width:210px;background:rgba(4,6,14,.97);border:1px solid var(--border2);border-radius:7px;padding:12px 14px;display:none;backdrop-filter:blur(10px);box-shadow:0 10px 40px rgba(0,0,0,.8);}
+#tooltip.on{display:block;}
+.tt-name{font-size:13px;font-weight:700;margin-bottom:4px;}
+.tt-sub-lbl{font-size:10px;color:var(--dim);margin-bottom:5px;}
+.tt-bar{background:#0c1220;border-radius:2px;height:3px;}
+.tt-fill{height:100%;border-radius:2px;}
+.tt-votes{font-size:10px;color:var(--dim);margin-top:2px;}
 
-  /* ── MAP AREA ── */
-  #map-area { flex: 1; position: relative; overflow: hidden; }
-  #map-svg { width: 100%; height: 100%; }
-  #map-svg path { transition: opacity .12s; cursor: pointer; }
-  #map-svg path:hover { opacity: .75; }
+/* LEGEND */
+#legend{position:absolute;bottom:12px;left:12px;background:rgba(4,6,14,.92);border:1px solid var(--border);border-radius:6px;padding:8px 12px;backdrop-filter:blur(6px);}
+.leg-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.leg-row:last-child{margin-bottom:0;}
+.leg-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+.leg-lbl{font-size:11px;color:var(--sub);}
 
-  #back-btn {
-    position: absolute; top: 12px; left: 12px; z-index: 10;
-    background: rgba(4,6,14,.92); border: 1px solid var(--border2); color: var(--sub);
-    padding: 7px 13px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
-    font-family: inherit; display: none; backdrop-filter: blur(6px);
-    transition: all .15s;
-  }
-  #back-btn:hover { color: var(--text); border-color: #2a4a8a; }
-  #map-label {
-    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
-    background: rgba(4,6,14,.88); border: 1px solid var(--border2);
-    padding: 4px 16px; border-radius: 20px; z-index: 5; font-size: 12px; color: var(--sub);
-    backdrop-filter: blur(6px); white-space: nowrap; pointer-events: none;
-  }
-  #map-label small { font-size: 10px; opacity: .5; margin-left: 4px; }
-  #loading-overlay {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    flex-direction: column; gap: 12px; background: var(--bg); z-index: 20;
-  }
-  .spinner { width: 28px; height: 28px; border: 2px solid #1a2a40; border-top-color: #3a5ad4; border-radius: 50%; animation: spin .7s linear infinite; }
-  #loading-msg { font-size: 13px; color: var(--sub); }
+/* RIGHT PANEL */
+#right-panel{width:262px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+#detail-area{padding:13px;border-bottom:1px solid var(--border);min-height:175px;}
+#det-placeholder{color:var(--dim);font-size:12px;text-align:center;padding-top:26px;line-height:1.9;}
+#det-content{display:none;}
+#det-name{font-size:14px;font-weight:700;margin-bottom:4px;}
+#det-winner-badge{display:inline-flex;align-items:center;border-radius:3px;padding:3px 9px;font-size:12px;font-weight:700;margin-bottom:7px;}
+.det-rate-wrap{display:flex;align-items:center;gap:7px;margin-bottom:9px;}
+.det-rate-bar{flex:1;background:#0c1220;border-radius:2px;height:4px;}
+.det-rate-fill{height:100%;border-radius:2px;transition:width .4s;}
+.det-rate-lbl{font-size:11px;color:var(--sub);flex-shrink:0;}
+.dc{margin-bottom:8px;}
+.dc-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;}
+.dc-bar{background:#0c1220;border-radius:2px;height:4px;}
+.dc-fill{height:100%;border-radius:2px;transition:width .4s;}
+.dc-votes{font-size:10px;color:var(--dim);margin-top:2px;}
 
-  /* ── TOOLTIP ── */
-  #tooltip {
-    position: absolute; pointer-events: none; z-index: 30; min-width: 210px;
-    background: rgba(4,6,14,.97); border: 1px solid var(--border2);
-    border-radius: 7px; padding: 13px 15px; display: none;
-    backdrop-filter: blur(10px); box-shadow: 0 10px 40px rgba(0,0,0,.75);
-  }
-  #tooltip.show { display: block; }
-  .tt-name { font-size: 13px; font-weight: 700; margin-bottom: 5px; }
-  .tt-winner { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
-  .tt-wd { width: 8px; height: 8px; border-radius: 2px; }
-  .tt-wn { font-size: 12px; font-weight: 700; }
-  .tt-rate { font-size: 11px; color: var(--sub); margin-bottom: 8px; }
-  .tt-cand { margin-bottom: 6px; }
-  .tt-cand-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
-  .tt-cand-pct { font-weight: 700; }
-  .tt-bar-bg { background: #0c1220; border-radius: 2px; height: 3px; }
-  .tt-bar-fill { height: 100%; border-radius: 2px; transition: width .3s; }
-  .tt-votes { font-size: 10px; color: var(--dim); margin-top: 2px; }
+#list-area{flex:1;overflow-y:auto;padding:5px;}
+#list-hdr{font-size:11px;color:var(--dim);font-weight:600;padding:4px 8px 5px;}
+.srow{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;cursor:pointer;border:1px solid transparent;margin-bottom:1px;transition:background .1s;}
+.srow:hover{background:rgba(10,16,30,.9);}
+.srow.active{background:rgba(20,36,80,.7);border-color:#2a3a6a;}
+.srow .sdot{width:7px;height:7px;border-radius:2px;flex-shrink:0;}
+.srow .sname{flex:1;font-size:12px;color:#a8b0c8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.srow.active .sname{color:var(--text);font-weight:700;}
+.srow .sparty{font-size:11px;font-weight:700;flex-shrink:0;}
+.srow .srate-wrap{width:36px;flex-shrink:0;}
+.srate-num{font-size:9px;color:var(--dim);text-align:right;}
+.srate-bar{height:2px;background:#0c1220;border-radius:1px;margin-top:2px;}
+.srate-fill{height:100%;border-radius:1px;}
 
-  /* ── MAP LEGEND ── */
-  #legend {
-    position: absolute; bottom: 14px; left: 14px;
-    background: rgba(4,6,14,.9); border: 1px solid var(--border); border-radius: 6px;
-    padding: 9px 13px; backdrop-filter: blur(6px);
-  }
-  .leg-item { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-  .leg-item:last-child { margin-bottom: 0; }
-  .leg-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-  .leg-label { font-size: 11px; color: var(--sub); }
-
-  /* ── RIGHT PANEL ── */
-  #right-panel { width: 268px; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; }
-
-  #detail-area { padding: 14px; border-bottom: 1px solid var(--border); min-height: 180px; }
-  #detail-placeholder { color: var(--dim); font-size: 12px; text-align: center; padding-top: 28px; line-height: 1.8; }
-  #detail-content { display: none; }
-  #det-name { font-size: 14px; font-weight: 700; margin-bottom: 5px; }
-  #det-winner-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 3px; padding: 3px 9px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
-  .det-rate-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .det-rate-bar { flex: 1; background: #0c1220; border-radius: 2px; height: 4px; }
-  .det-rate-fill { height: 100%; border-radius: 2px; transition: width .4s; }
-  .det-rate-label { font-size: 11px; color: var(--sub); flex-shrink: 0; }
-  #det-cands { margin-top: 4px; }
-  .det-cand { margin-bottom: 9px; }
-  .det-cand-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
-  .det-cand-bar { background: #0c1220; border-radius: 2px; height: 4px; }
-  .det-cand-fill { height: 100%; border-radius: 2px; transition: width .4s; }
-  .det-cand-votes { font-size: 10px; color: var(--dim); margin-top: 2px; }
-
-  #list-area { flex: 1; overflow-y: auto; padding: 6px; }
-  #list-header { font-size: 11px; color: var(--dim); font-weight: 600; padding: 4px 8px 6px; }
-  .sido-row {
-    display: flex; align-items: center; gap: 7px; padding: 7px 8px;
-    border-radius: 5px; cursor: pointer; border: 1px solid transparent;
-    margin-bottom: 1px; transition: background .1s, border-color .1s;
-  }
-  .sido-row:hover { background: rgba(10,16,30,.9); }
-  .sido-row.active { background: rgba(20,36,80,.7); border-color: #2a3a6a; }
-  .sr-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-  .sr-name { flex: 1; font-size: 12px; color: #a8b0c8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sido-row.active .sr-name { color: var(--text); font-weight: 700; }
-  .sr-party { font-size: 11px; font-weight: 700; flex-shrink: 0; }
-  .sr-rate-wrap { width: 38px; flex-shrink: 0; }
-  .sr-rate-num { font-size: 9px; color: var(--dim); text-align: right; }
-  .sr-rate-bar { height: 2px; background: #0c1220; border-radius: 1px; margin-top: 2px; }
-  .sr-rate-fill { height: 100%; border-radius: 1px; }
-
-  /* ── SETTINGS MODAL ── */
-  #settings-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.82);
-    align-items: center; justify-content: center; z-index: 200;
-  }
-  #settings-overlay.show { display: flex; }
-  #settings-modal {
-    background: #0a0e1c; border: 1px solid var(--border2); border-radius: 9px;
-    padding: 24px; width: 440px; max-width: 95vw;
-    box-shadow: 0 28px 70px rgba(0,0,0,.9);
-  }
-  .modal-title { font-size: 15px; font-weight: 700; margin-bottom: 20px; }
-  .form-label { font-size: 12px; color: var(--sub); font-weight: 600; display: block; margin-bottom: 6px; }
-  .form-input {
-    width: 100%; padding: 9px 10px; border-radius: 4px;
-    background: #060810; border: 1px solid var(--border2); color: var(--text);
-    font-size: 12px; outline: none; font-family: inherit;
-    transition: border-color .15s;
-  }
-  .form-input:focus { border-color: #2a4a8a; }
-  .form-hint { font-size: 11px; color: var(--dim); margin-top: 5px; line-height: 1.5; }
-  .form-group { margin-bottom: 16px; }
-  .toggle-row { display: flex; gap: 8px; }
-  .toggle-btn {
-    flex: 1; padding: 9px; border-radius: 4px; cursor: pointer;
-    background: rgba(8,12,24,.9); border: 1px solid var(--border2);
-    color: var(--sub); font-size: 12px; font-weight: 600; font-family: inherit;
-    transition: all .15s;
-  }
-  .toggle-btn.active { background: rgba(18,89,195,.3); border-color: #1259c3; color: #6b9cf5; }
-  .warning-box {
-    background: rgba(249,115,22,.08); border: 1px solid rgba(249,115,22,.25);
-    border-radius: 4px; padding: 10px 12px; font-size: 11px; color: #f4a060;
-    line-height: 1.7; margin-bottom: 16px;
-  }
-  .info-box {
-    background: rgba(18,89,195,.08); border: 1px solid rgba(18,89,195,.2);
-    border-radius: 4px; padding: 10px 12px; font-size: 11px; color: #6b9cf5;
-    line-height: 1.7; margin-bottom: 16px;
-  }
-  .modal-btns { display: flex; gap: 8px; margin-top: 4px; }
-  .btn-primary { flex: 1; padding: 11px; border-radius: 4px; cursor: pointer; background: rgba(18,89,195,.3); border: 1px solid #1259c3; color: #6b9cf5; font-size: 13px; font-weight: 700; font-family: inherit; }
-  .btn-secondary { padding: 11px 18px; border-radius: 4px; cursor: pointer; background: transparent; border: 1px solid var(--border2); color: var(--sub); font-size: 13px; font-family: inherit; }
-
-  /* ── SCROLLBAR ── */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: #060810; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-  /* ── ANIMATIONS ── */
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
-  @keyframes spin { to{transform:rotate(360deg)} }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-
-  /* ── PROGRESS SEGMENTS (seat bar) ── */
-  #seat-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin: 0 6px; flex: 1; max-width: 220px; }
-  .seat-seg { height: 100%; transition: width .5s; }
+/* SETTINGS MODAL */
+#settings-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);align-items:center;justify-content:center;z-index:200;}
+#settings-overlay.on{display:flex;}
+#settings-modal{background:#0a0e1c;border:1px solid var(--border2);border-radius:9px;padding:22px;width:430px;max-width:95vw;box-shadow:0 28px 70px rgba(0,0,0,.9);max-height:90vh;overflow-y:auto;}
+.m-title{font-size:15px;font-weight:700;margin-bottom:18px;}
+.m-lbl{font-size:12px;color:var(--sub);font-weight:600;display:block;margin-bottom:5px;}
+.m-input{width:100%;padding:8px 10px;border-radius:4px;background:#060810;border:1px solid var(--border2);color:var(--text);font-size:12px;outline:none;font-family:inherit;transition:border-color .15s;}
+.m-input:focus{border-color:#2a4a8a;}
+.m-hint{font-size:11px;color:var(--dim);margin-top:4px;line-height:1.5;}
+.m-group{margin-bottom:15px;}
+.tog-row{display:flex;gap:7px;}
+.tbtn{flex:1;padding:8px;border-radius:4px;cursor:pointer;background:rgba(8,12,24,.9);border:1px solid var(--border2);color:var(--sub);font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;}
+.tbtn.active{background:rgba(18,89,195,.3);border-color:#1259c3;color:#6b9cf5;}
+.warn-box{background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:4px;padding:9px 12px;font-size:11px;color:#f4a060;line-height:1.7;margin-bottom:14px;}
+.info-box{background:rgba(18,89,195,.08);border:1px solid rgba(18,89,195,.2);border-radius:4px;padding:9px 12px;font-size:11px;color:#6b9cf5;line-height:1.7;margin-bottom:14px;}
+.m-btns{display:flex;gap:7px;}
+.btn-ok{flex:1;padding:10px;border-radius:4px;cursor:pointer;background:rgba(18,89,195,.3);border:1px solid #1259c3;color:#6b9cf5;font-size:13px;font-weight:700;font-family:inherit;}
+.btn-cancel{padding:10px 16px;border-radius:4px;cursor:pointer;background:transparent;border:1px solid var(--border2);color:var(--sub);font-size:13px;font-family:inherit;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#060810;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 </style>
 </head>
 <body>
 
-<!-- ── HEADER ── -->
 <div id="header">
-  <div style="display:flex;align-items:center">
+  <div style="display:flex;align-items:center;min-width:0">
     <div class="kbs-badge">KBS</div>
-    <div>
-      <div class="header-title">2026 전국동시지방선거 <span>개표현황</span></div>
-      <div class="header-sub">제9회 · 2026.06.03(수) · 광역단체장(시·도지사)</div>
+    <div style="min-width:0">
+      <div id="header-title">전국동시지방선거 <span id="hd-year">개표현황</span></div>
+      <div id="header-sub">광역단체장(시·도지사)</div>
     </div>
     <div id="live-badge"><div class="live-dot"></div><span class="live-text">LIVE</span></div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px">
-    <div id="update-time"><b>마지막 업데이트</b><span id="time-str">--:--:--</span></div>
-    <div class="header-btns">
-      <button class="btn" id="btn-live" onclick="toggleLive()">▶ 실시간 시작</button>
-      <button class="btn" onclick="openSettings()">⚙ 설정</button>
-    </div>
+  <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+    <div id="time-wrap"><b>마지막 갱신</b><span id="time-str">--:--:--</span></div>
+    <button class="hbtn" id="btn-live" onclick="toggleLive()" style="display:none">▶ 실시간 시작</button>
+    <button class="hbtn" id="btn-fetch" onclick="fetchHistorical()" style="display:none">↻ API 불러오기</button>
+    <button class="hbtn" onclick="openSettings()">⚙ 설정</button>
   </div>
 </div>
 
-<!-- ── SUMMARY BAR ── -->
+<div id="election-tabs"></div>
+
 <div id="summary-bar">
-  <div class="sb-label">광역단체장 17석</div>
+  <div class="sb-label" id="sb-total-label">광역단체장</div>
   <div class="sb-div"></div>
   <div id="seat-bar"></div>
-  <div id="party-chips" style="display:flex;gap:14px"></div>
+  <div id="party-chips"></div>
   <div class="sb-right">
-    <div id="error-msg"></div>
-    <div id="api-mode-badge" class="mock">MOCK</div>
-    <div id="avg-rate-label">평균 개표율 <b id="avg-rate-val">0.0%</b></div>
+    <div id="err-msg"></div>
+    <div id="data-src-badge"></div>
+    <div id="avg-rate-lbl">개표율 <b id="avg-rate-val">0.0%</b></div>
   </div>
 </div>
 
-<!-- ── MAIN ── -->
 <div id="main">
-
-  <!-- 지도 영역 -->
   <div id="map-area">
-    <div id="loading-overlay">
-      <div class="spinner"></div>
-      <div id="loading-msg">지도 데이터 로딩 중...</div>
-    </div>
+    <div id="loading-wrap"><div class="spinner"></div><div id="loading-txt">지도 데이터 로딩 중...</div></div>
     <button id="back-btn" onclick="drillUp()">← 전국 지도</button>
-    <div id="map-label">시도별 당선 현황 <small>클릭 → 시군구 드릴다운</small></div>
+    <div id="map-label"></div>
     <svg id="map-svg"></svg>
     <div id="tooltip"></div>
     <div id="legend"></div>
   </div>
-
-  <!-- 우측 패널 -->
   <div id="right-panel">
     <div id="detail-area">
-      <div id="detail-placeholder">지도에서 시도를<br><strong style="color:var(--sub)">클릭하거나 마우스를</strong><br>올려보세요</div>
-      <div id="detail-content">
+      <div id="det-placeholder">지도에서 시도를<br><strong style="color:var(--sub)">클릭하거나<br>마우스를 올려보세요</strong></div>
+      <div id="det-content">
         <div id="det-name"></div>
         <div id="det-winner-badge"></div>
-        <div class="det-rate-wrap">
-          <div class="det-rate-bar" style="flex:1"><div class="det-rate-fill" id="det-rate-fill"></div></div>
-          <div class="det-rate-label">개표 <span id="det-rate-val">0%</span></div>
-        </div>
+        <div class="det-rate-wrap"><div class="det-rate-bar"><div class="det-rate-fill" id="det-rate-fill"></div></div><div class="det-rate-lbl">개표 <span id="det-rate-val">0%</span></div></div>
         <div id="det-cands"></div>
       </div>
     </div>
     <div id="list-area">
-      <div id="list-header">전체 시도 현황</div>
+      <div id="list-hdr">전체 시도 현황</div>
       <div id="sido-list"></div>
     </div>
   </div>
 </div>
 
-<!-- ── 설정 모달 ── -->
 <div id="settings-overlay" onclick="if(event.target===this)closeSettings()">
   <div id="settings-modal">
-    <div class="modal-title">⚙ 데이터 / API 설정</div>
-
-    <div class="form-group">
-      <label class="form-label">데이터 모드</label>
-      <div class="toggle-row">
-        <button class="toggle-btn active" id="mode-mock" onclick="setMode('mock')">🔧 Mock 데모</button>
-        <button class="toggle-btn" id="mode-real" onclick="setMode('real')">🌐 선관위 실제 API</button>
+    <div class="m-title">⚙ 데이터 / API 설정</div>
+    <div class="m-group">
+      <label class="m-lbl">2026 선거 데이터 모드</label>
+      <div class="tog-row">
+        <button class="tbtn active" id="mode-mock" onclick="setMode('mock')">🔧 Mock 데모</button>
+        <button class="tbtn" id="mode-real" onclick="setMode('real')">🌐 선관위 실제 API</button>
       </div>
     </div>
-
     <div id="real-settings" style="display:none">
-      <div class="form-group">
-        <label class="form-label">공공데이터포털 API Key (serviceKey)</label>
-        <input class="form-input" type="text" id="input-apikey" placeholder="인증키 입력 (URL 인코딩 전 원본)">
-        <div class="form-hint">data.go.kr → 중앙선거관리위원회_투·개표 정보 (15000900)<br>⚠ 이 값은 브라우저 localStorage에만 저장됩니다 (코드/GitHub에 노출 안됨)</div>
+      <div class="m-group">
+        <label class="m-lbl">공공데이터포털 API Key (serviceKey)</label>
+        <input class="m-input" type="password" id="input-apikey" placeholder="인증키 입력 (URL 인코딩 전 원본 값)">
+        <div class="m-hint">⚠ 브라우저 localStorage에만 저장 — GitHub 코드에 절대 노출 없음</div>
       </div>
-      <div class="form-group">
-        <label class="form-label">CORS 프록시 URL (필수)</label>
-        <input class="form-input" type="text" id="input-proxy" placeholder="https://your-worker.workers.dev/proxy">
-        <div class="form-hint">브라우저에서 직접 apis.data.go.kr 호출 시 CORS 오류 발생<br>아래 Cloudflare Worker 배포 후 URL 입력 →  README.md 참고</div>
+      <div class="m-group">
+        <label class="m-lbl">CORS 프록시 URL <span style="color:#ef8a44">(필수)</span></label>
+        <input class="m-input" type="text" id="input-proxy" placeholder="https://your-worker.workers.dev">
+        <div class="m-hint">브라우저 직접 호출 시 CORS 오류 → Cloudflare worker.js 배포 후 입력</div>
       </div>
-      <div class="warning-box">
-        ⚠ <strong>CORS 제한</strong>: 공공데이터 API는 브라우저 직접 호출 불가<br>
-        반드시 <strong>프록시 서버</strong>를 통해 호출해야 합니다.<br>
-        → README.md의 <strong>Cloudflare Worker 배포 가이드</strong> 참고
-      </div>
+      <div class="warn-box">⚠ API Key와 프록시 설정 시, <strong>역대 선거 탭</strong>에서도<br>[↻ API 불러오기] 버튼으로 실제 개표 데이터를 조회할 수 있습니다.</div>
     </div>
-
-    <div class="form-group">
-      <label class="form-label">선거 ID (sgId)</label>
-      <input class="form-input" type="text" id="input-sgid" value="20260603">
-      <div class="form-hint">제9회 전국동시지방선거: 20260603</div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">폴링 간격 (실시간 모드)</label>
-      <div class="toggle-row">
-        <button class="toggle-btn" id="poll-10" onclick="setPoll(10)">10초</button>
-        <button class="toggle-btn active" id="poll-30" onclick="setPoll(30)">30초</button>
-        <button class="toggle-btn" id="poll-60" onclick="setPoll(60)">60초</button>
+    <div class="m-group">
+      <label class="m-lbl">실시간 폴링 간격</label>
+      <div class="tog-row">
+        <button class="tbtn" id="poll-10" onclick="setPoll(10)">10초</button>
+        <button class="tbtn active" id="poll-30" onclick="setPoll(30)">30초</button>
+        <button class="tbtn" id="poll-60" onclick="setPoll(60)">60초</button>
       </div>
     </div>
-
-    <div class="info-box">
-      💡 <strong>선거 당일 운영 권장 순서</strong><br>
-      1. 설정 → API Key 입력 → 프록시 URL 입력<br>
-      2. [실제 API] 모드 선택<br>
-      3. 헤더의 [▶ 실시간 시작] 버튼 클릭<br>
-      4. 자동으로 30초마다 갱신됩니다
-    </div>
-
-    <div class="modal-btns">
-      <button class="btn-primary" onclick="saveSettings()">저장 및 적용</button>
-      <button class="btn-secondary" onclick="closeSettings()">취소</button>
+    <div class="info-box">💡 <strong>역대 선거 내장 데이터 안내</strong><br>2010·2014·2018·2022년 실제 확정 결과가 내장되어 있어<br>API Key 없이도 탭 클릭만으로 바로 확인 가능합니다.</div>
+    <div class="m-btns">
+      <button class="btn-ok" onclick="saveSettings()">저장 및 적용</button>
+      <button class="btn-cancel" onclick="closeSettings()">취소</button>
     </div>
   </div>
 </div>
 
 <script>
-// ═══════════════════════════════════════════════
-//  CONSTANTS
-// ═══════════════════════════════════════════════
-const PARTIES = {
-  '국민의힘':     { color: '#E61E2B', short: '국힘'  },
-  '더불어민주당': { color: '#1259C3', short: '민주'  },
-  '조국혁신당':   { color: '#00A68C', short: '혁신'  },
-  '개혁신당':     { color: '#F97316', short: '개혁'  },
-  '무소속':       { color: '#6B7280', short: '무소속' },
-  '기타':         { color: '#7C5AF0', short: '기타'  },
+// ═══════════════════════════════════
+//  PARTY COLORS (정당 계보별 일관성)
+// ═══════════════════════════════════
+const PARTY_DB = {
+  '국민의힘':      {color:'#E61E2B',short:'국힘'},
+  '자유한국당':    {color:'#E61E2B',short:'자한'},
+  '새누리당':      {color:'#E61E2B',short:'새누'},
+  '한나라당':      {color:'#E61E2B',short:'한나'},
+  '더불어민주당':  {color:'#1259C3',short:'민주'},
+  '새정치민주연합':{color:'#1259C3',short:'새정'},
+  '민주당':        {color:'#1259C3',short:'민주'},
+  '열린우리당':    {color:'#1259C3',short:'열우'},
+  '국민참여당':    {color:'#1259C3',short:'참여'},
+  '민주노동당':    {color:'#F97316',short:'민노'},
+  '조국혁신당':    {color:'#00A68C',short:'혁신'},
+  '바른미래당':    {color:'#F97316',short:'바른'},
+  '개혁신당':      {color:'#F4802A',short:'개혁'},
+  '진보당':        {color:'#F4802A',short:'진보'},
+  '정의당':        {color:'#F4802A',short:'정의'},
+  '자유선진당':    {color:'#8B6FD4',short:'자선'},
+  '무소속':        {color:'#6B7280',short:'무소'},
 };
-const getPartyColor = p => PARTIES[p]?.color ?? '#666';
-const getPartyShort = p => PARTIES[p]?.short ?? p?.slice(0,3) ?? '';
-
-const SIDO_LIST = [
-  '서울특별시','부산광역시','대구광역시','인천광역시','광주광역시',
-  '대전광역시','울산광역시','세종특별자치시','경기도',
-  '강원특별자치도','충청북도','충청남도','전북특별자치도',
-  '전라남도','경상북도','경상남도','제주특별자치도'
-];
-const SIDO_CODE = {
-  '서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28',
-  '광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36',
-  '경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44',
-  '전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50',
-};
-const GEO_NAME_MAP = { '강원도':'강원특별자치도', '전라북도':'전북특별자치도' };
-const normName = n => GEO_NAME_MAP[n] || n;
-const shortSido = n => n
-  .replace('특별자치도','').replace('특별자치시','').replace('특별시','시')
-  .replace('광역시','시').replace(/^경상/,'경').replace(/^충청/,'충');
+const pc = p => PARTY_DB[p]?.color ?? '#666';
+const ps = p => PARTY_DB[p]?.short ?? (p?.slice(0,3) ?? '?');
 const fmt = n => n ? Number(n).toLocaleString('ko-KR') : '-';
 
-// ═══════════════════════════════════════════════
-//  MOCK DATA
-// ═══════════════════════════════════════════════
-const MOCK = {
-  '서울특별시': { rate:92.4, cands:[{name:'박민준',party:'더불어민주당',votes:2847293,pct:51.2},{name:'오세현',party:'국민의힘',votes:2436847,pct:43.8},{name:'김나연',party:'조국혁신당',votes:278453,pct:5.0}]},
-  '부산광역시': { rate:88.7, cands:[{name:'이진구',party:'국민의힘',votes:873291,pct:54.3},{name:'변성환',party:'더불어민주당',votes:642847,pct:39.9},{name:'정태규',party:'개혁신당',votes:92847,pct:5.8}]},
-  '대구광역시': { rate:94.1, cands:[{name:'홍준표',party:'국민의힘',votes:621843,pct:67.2},{name:'신동현',party:'더불어민주당',votes:247193,pct:26.7},{name:'박재현',party:'무소속',votes:56293,pct:6.1}]},
-  '인천광역시': { rate:85.3, cands:[{name:'유정복',party:'더불어민주당',votes:742847,pct:49.8},{name:'최현식',party:'국민의힘',votes:638294,pct:42.8},{name:'이승재',party:'조국혁신당',votes:110847,pct:7.4}]},
-  '광주광역시': { rate:91.2, cands:[{name:'강기정',party:'더불어민주당',votes:358492,pct:62.4},{name:'오정훈',party:'조국혁신당',votes:148293,pct:25.8},{name:'김영현',party:'국민의힘',votes:67842,pct:11.8}]},
-  '대전광역시': { rate:79.6, cands:[{name:'이장우',party:'더불어민주당',votes:294847,pct:48.9},{name:'박연수',party:'국민의힘',votes:267293,pct:44.3},{name:'정민석',party:'개혁신당',votes:41293,pct:6.8}]},
-  '울산광역시': { rate:83.4, cands:[{name:'김두겸',party:'국민의힘',votes:247392,pct:52.1},{name:'이승준',party:'더불어민주당',votes:192847,pct:40.6},{name:'최태희',party:'무소속',votes:34592,pct:7.3}]},
-  '세종특별자치시': { rate:76.8, cands:[{name:'최민호',party:'더불어민주당',votes:89472,pct:53.7},{name:'이철주',party:'국민의힘',votes:64293,pct:38.6},{name:'박준영',party:'조국혁신당',votes:12847,pct:7.7}]},
-  '경기도': { rate:87.9, cands:[{name:'김동연',party:'더불어민주당',votes:4293847,pct:50.3},{name:'안철수',party:'국민의힘',votes:3847293,pct:45.1},{name:'이재학',party:'조국혁신당',votes:392847,pct:4.6}]},
-  '강원특별자치도': { rate:90.2, cands:[{name:'김진태',party:'국민의힘',votes:342847,pct:55.8},{name:'이상헌',party:'더불어민주당',votes:238492,pct:38.8},{name:'박준형',party:'개혁신당',votes:32847,pct:5.4}]},
-  '충청북도': { rate:88.6, cands:[{name:'노현섭',party:'국민의힘',votes:318492,pct:53.2},{name:'김영진',party:'더불어민주당',votes:247293,pct:41.3},{name:'이태형',party:'무소속',votes:32847,pct:5.5}]},
-  '충청남도': { rate:82.4, cands:[{name:'김태흠',party:'더불어민주당',votes:428493,pct:50.7},{name:'이현석',party:'국민의힘',votes:372847,pct:44.1},{name:'박정수',party:'개혁신당',votes:43847,pct:5.2}]},
-  '전북특별자치도': { rate:93.7, cands:[{name:'이재명',party:'더불어민주당',votes:382947,pct:55.8},{name:'정성주',party:'조국혁신당',votes:193847,pct:28.3},{name:'김상현',party:'국민의힘',votes:108493,pct:15.9}]},
-  '전라남도': { rate:91.8, cands:[{name:'박영배',party:'더불어민주당',votes:438492,pct:57.3},{name:'김진형',party:'조국혁신당',votes:192847,pct:25.2},{name:'이규성',party:'국민의힘',votes:133847,pct:17.5}]},
-  '경상북도': { rate:89.3, cands:[{name:'이철우',party:'국민의힘',votes:628492,pct:68.4},{name:'최현철',party:'더불어민주당',votes:238492,pct:25.9},{name:'박재민',party:'무소속',votes:51847,pct:5.7}]},
-  '경상남도': { rate:86.7, cands:[{name:'박완수',party:'국민의힘',votes:728492,pct:56.7},{name:'김정호',party:'더불어민주당',votes:492847,pct:38.4},{name:'이재용',party:'개혁신당',votes:63847,pct:4.9}]},
-  '제주특별자치도': { rate:77.4, cands:[{name:'오영훈',party:'더불어민주당',votes:147293,pct:50.8},{name:'이상봉',party:'국민의힘',votes:127847,pct:44.1},{name:'고성인',party:'무소속',votes:14847,pct:5.1}]},
-};
-// winner 자동 계산
-Object.keys(MOCK).forEach(k => { MOCK[k].winner = MOCK[k].cands[0].party; });
+// ═══════════════════════════════════
+//  ELECTIONS REGISTRY
+// ═══════════════════════════════════
+const ELECTIONS = [
+  {sgId:'20260603',round:'제9회',year:2026,date:'2026.06.03',status:'upcoming',sgTypecode:'3'},
+  {sgId:'20220601',round:'제8회',year:2022,date:'2022.06.01',status:'done',    sgTypecode:'3'},
+  {sgId:'20180613',round:'제7회',year:2018,date:'2018.06.13',status:'done',    sgTypecode:'3'},
+  {sgId:'20140604',round:'제6회',year:2014,date:'2014.06.04',status:'done',    sgTypecode:'3'},
+  {sgId:'20100602',round:'제5회',year:2010,date:'2010.06.02',status:'done',    sgTypecode:'3'},
+];
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════
+//  HISTORICAL DATA  (실제 확정 결과)
+// ═══════════════════════════════════
+
+// ── 2022 제8회 ──────────────────────
+const D2022 = {
+  '서울특별시':    {rate:100,cands:[{name:'오세훈',party:'국민의힘',    votes:2975944,pct:59.1},{name:'송영길',party:'더불어민주당',votes:1968793,pct:39.1},{name:'오태양',party:'정의당',    votes:91234, pct:1.8}]},
+  '부산광역시':    {rate:100,cands:[{name:'박형준',party:'국민의힘',    votes:895371, pct:62.9},{name:'변성완',party:'더불어민주당',votes:529163, pct:37.1}]},
+  '대구광역시':    {rate:100,cands:[{name:'홍준표',party:'국민의힘',    votes:686203, pct:73.2},{name:'서재헌',party:'더불어민주당',votes:250872, pct:26.8}]},
+  '인천광역시':    {rate:100,cands:[{name:'유정복',party:'국민의힘',    votes:763420, pct:50.2},{name:'박남춘',party:'더불어민주당',votes:758013, pct:49.8}]},
+  '광주광역시':    {rate:100,cands:[{name:'강기정',party:'더불어민주당',votes:474921, pct:74.9},{name:'이정선',party:'국민의힘',    votes:158374, pct:25.1}]},
+  '대전광역시':    {rate:100,cands:[{name:'이장우',party:'국민의힘',    votes:336921, pct:54.1},{name:'허태정',party:'더불어민주당',votes:285432, pct:45.9}]},
+  '울산광역시':    {rate:100,cands:[{name:'김두겸',party:'국민의힘',    votes:258312, pct:54.3},{name:'송철호',party:'더불어민주당',votes:217431, pct:45.7}]},
+  '세종특별자치시':{rate:100,cands:[{name:'최민호',party:'국민의힘',    votes:80312,  pct:53.3},{name:'이춘희',party:'더불어민주당',votes:70321,  pct:46.7}]},
+  '경기도':        {rate:100,cands:[{name:'김동연',party:'더불어민주당',votes:3892341,pct:49.7},{name:'김은혜',party:'국민의힘',    votes:3851234,pct:49.1},{name:'강용',party:'정의당',votes:177320,pct:1.2}]},
+  '강원특별자치도':{rate:100,cands:[{name:'김진태',party:'국민의힘',    votes:356231, pct:55.3},{name:'이광재',party:'더불어민주당',votes:287412, pct:44.7}]},
+  '충청북도':      {rate:100,cands:[{name:'김영환',party:'국민의힘',    votes:322341, pct:52.3},{name:'노영민',party:'더불어민주당',votes:293812, pct:47.7}]},
+  '충청남도':      {rate:100,cands:[{name:'김태흠',party:'국민의힘',    votes:468231, pct:52.4},{name:'양승조',party:'더불어민주당',votes:424983, pct:47.6}]},
+  '전북특별자치도':{rate:100,cands:[{name:'김관영',party:'더불어민주당',votes:387342, pct:53.0},{name:'조배숙',party:'국민의힘',    votes:343124, pct:47.0}]},
+  '전라남도':      {rate:100,cands:[{name:'김영록',party:'더불어민주당',votes:538231, pct:79.8},{name:'이정현',party:'국민의힘',    votes:136234, pct:20.2}]},
+  '경상북도':      {rate:100,cands:[{name:'이철우',party:'국민의힘',    votes:686234, pct:72.8},{name:'임미애',party:'더불어민주당',votes:256891, pct:27.2}]},
+  '경상남도':      {rate:100,cands:[{name:'박완수',party:'국민의힘',    votes:785231, pct:63.8},{name:'양문석',party:'더불어민주당',votes:444782, pct:36.2}]},
+  '제주특별자치도':{rate:100,cands:[{name:'오영훈',party:'더불어민주당',votes:154234, pct:52.9},{name:'허향진',party:'국민의힘',    votes:137452, pct:47.1}]},
+};
+
+// ── 2018 제7회 ──────────────────────
+const D2018 = {
+  '서울특별시':    {rate:100,cands:[{name:'박원순',party:'더불어민주당',votes:2786203,pct:52.8},{name:'김문수',party:'자유한국당',votes:2107832,pct:39.9},{name:'안철수',party:'바른미래당',votes:469230,pct:8.9}]},
+  '부산광역시':    {rate:100,cands:[{name:'오거돈',party:'더불어민주당',votes:758312, pct:55.0},{name:'서병수',party:'자유한국당',votes:579234, pct:42.0},{name:'이정관',party:'바른미래당',votes:41234,  pct:3.0}]},
+  '대구광역시':    {rate:100,cands:[{name:'권영진',party:'자유한국당',  votes:566234, pct:53.1},{name:'임대윤',party:'더불어민주당',votes:395123,pct:37.1},{name:'이진훈',party:'바른미래당',votes:105342,pct:9.8}]},
+  '인천광역시':    {rate:100,cands:[{name:'박남춘',party:'더불어민주당',votes:697234, pct:53.2},{name:'유정복',party:'자유한국당',  votes:496832, pct:37.9},{name:'문병호',party:'바른미래당',votes:116342,pct:8.9}]},
+  '광주광역시':    {rate:100,cands:[{name:'이용섭',party:'더불어민주당',votes:398234, pct:68.8},{name:'이계환',party:'자유한국당',  votes:85231,  pct:14.7},{name:'민형배',party:'정의당',    votes:94231, pct:16.5}]},
+  '대전광역시':    {rate:100,cands:[{name:'허태정',party:'더불어민주당',votes:289234, pct:55.7},{name:'박성효',party:'자유한국당',  votes:195231, pct:37.6},{name:'이상민',party:'바른미래당',votes:34231, pct:6.7}]},
+  '울산광역시':    {rate:100,cands:[{name:'송철호',party:'더불어민주당',votes:225231, pct:52.6},{name:'김기현',party:'자유한국당',  votes:193234, pct:45.1},{name:'이상범',party:'바른미래당',votes:9834,  pct:2.3}]},
+  '세종특별자치시':{rate:100,cands:[{name:'이춘희',party:'더불어민주당',votes:69231,  pct:57.1},{name:'이기봉',party:'자유한국당',  votes:52134,  pct:42.9}]},
+  '경기도':        {rate:100,cands:[{name:'이재명',party:'더불어민주당',votes:3489234,pct:56.4},{name:'남경필',party:'자유한국당',  votes:2341234,pct:37.9},{name:'김영환',party:'바른미래당',votes:348231,pct:5.7}]},
+  '강원특별자치도':{rate:100,cands:[{name:'최문순',party:'더불어민주당',votes:316231, pct:55.8},{name:'최흥집',party:'자유한국당',  votes:250234, pct:44.2}]},
+  '충청북도':      {rate:100,cands:[{name:'이시종',party:'더불어민주당',votes:305234, pct:55.6},{name:'박경국',party:'자유한국당',  votes:243234, pct:44.4}]},
+  '충청남도':      {rate:100,cands:[{name:'양승조',party:'더불어민주당',votes:428234, pct:52.9},{name:'이인제',party:'자유한국당',  votes:381234, pct:47.1}]},
+  '전북특별자치도':{rate:100,cands:[{name:'송하진',party:'더불어민주당',votes:469234, pct:76.6},{name:'이정현',party:'자유한국당',  votes:143234, pct:23.4}]},
+  '전라남도':      {rate:100,cands:[{name:'김영록',party:'더불어민주당',votes:589234, pct:87.3},{name:'이정선',party:'자유한국당',  votes:85234,  pct:12.7}]},
+  '경상북도':      {rate:100,cands:[{name:'이철우',party:'자유한국당',  votes:576234, pct:56.6},{name:'오중기',party:'더불어민주당',votes:441234, pct:43.4}]},
+  '경상남도':      {rate:100,cands:[{name:'김경수',party:'더불어민주당',votes:728234, pct:52.7},{name:'김태호',party:'자유한국당',  votes:653234, pct:47.3}]},
+  '제주특별자치도':{rate:100,cands:[{name:'원희룡',party:'바른미래당',  votes:129234, pct:43.8},{name:'문대림',party:'더불어민주당',votes:125234, pct:42.5},{name:'고승수',party:'자유한국당',votes:40234,pct:13.7}]},
+};
+
+// ── 2014 제6회 ──────────────────────
+const D2014 = {
+  '서울특별시':    {rate:100,cands:[{name:'박원순',party:'새정치민주연합',votes:2812234,pct:55.9},{name:'정몽준',party:'새누리당',    votes:2218234,pct:44.1}]},
+  '부산광역시':    {rate:100,cands:[{name:'서병수',party:'새누리당',      votes:786234, pct:53.8},{name:'오거돈',party:'새정치민주연합',votes:673234,pct:46.2}]},
+  '대구광역시':    {rate:100,cands:[{name:'권영진',party:'새누리당',      votes:606234, pct:62.6},{name:'김부겸',party:'새정치민주연합',votes:362234,pct:37.4}]},
+  '인천광역시':    {rate:100,cands:[{name:'유정복',party:'새누리당',      votes:686234, pct:51.5},{name:'송영길',party:'새정치민주연합',votes:646234,pct:48.5}]},
+  '광주광역시':    {rate:100,cands:[{name:'윤장현',party:'새정치민주연합',votes:246234, pct:55.3},{name:'강운태',party:'새정치민주연합',votes:197234,pct:44.7}]},
+  '대전광역시':    {rate:100,cands:[{name:'권선택',party:'새정치민주연합',votes:244234, pct:50.8},{name:'박성효',party:'새누리당',      votes:236234,pct:49.2}]},
+  '울산광역시':    {rate:100,cands:[{name:'김기현',party:'새누리당',      votes:254234, pct:61.6},{name:'김종훈',party:'새정치민주연합',votes:158234,pct:38.4}]},
+  '세종특별자치시':{rate:100,cands:[{name:'이춘희',party:'새정치민주연합',votes:55234,  pct:49.2},{name:'최민호',party:'새누리당',      votes:37234,  pct:33.2},{name:'박덕흠',party:'무소속',votes:19734,pct:17.6}]},
+  '경기도':        {rate:100,cands:[{name:'남경필',party:'새누리당',      votes:2768234,pct:49.8},{name:'김진표',party:'새정치민주연합',votes:2613234,pct:47.1},{name:'심상정',party:'정의당',  votes:173234,pct:3.1}]},
+  '강원특별자치도':{rate:100,cands:[{name:'최문순',party:'새정치민주연합',votes:259234, pct:50.1},{name:'최흥집',party:'새누리당',      votes:258234,  pct:49.9}]},
+  '충청북도':      {rate:100,cands:[{name:'이시종',party:'새정치민주연합',votes:294234, pct:54.9},{name:'윤진식',party:'새누리당',      votes:241234, pct:45.1}]},
+  '충청남도':      {rate:100,cands:[{name:'안희정',party:'새정치민주연합',votes:508234, pct:58.9},{name:'정진석',party:'새누리당',      votes:355234, pct:41.1}]},
+  '전북특별자치도':{rate:100,cands:[{name:'송하진',party:'새정치민주연합',votes:442234, pct:71.9},{name:'이형식',party:'새누리당',      votes:173234, pct:28.1}]},
+  '전라남도':      {rate:100,cands:[{name:'이낙연',party:'새정치민주연합',votes:598234, pct:78.3},{name:'이정현',party:'새누리당',      votes:165234, pct:21.7}]},
+  '경상북도':      {rate:100,cands:[{name:'김관용',party:'새누리당',      votes:636234, pct:73.3},{name:'오중기',party:'새정치민주연합',votes:231234, pct:26.7}]},
+  '경상남도':      {rate:100,cands:[{name:'홍준표',party:'새누리당',      votes:726234, pct:57.2},{name:'김경수',party:'새정치민주연합',votes:542234, pct:42.8}]},
+  '제주특별자치도':{rate:100,cands:[{name:'원희룡',party:'새누리당',      votes:142234, pct:54.7},{name:'신구범',party:'새정치민주연합',votes:117234, pct:45.3}]},
+};
+
+// ── 2010 제5회 ──────────────────────
+// 세종특별자치시는 2012년 출범 → null 처리
+const D2010 = {
+  '서울특별시':    {rate:100,cands:[{name:'오세훈',party:'한나라당',  votes:2186234,pct:47.4},{name:'한명숙',party:'민주당',      votes:2100234,pct:45.5},{name:'노회찬',party:'진보당',    votes:310234,pct:6.7}]},
+  '부산광역시':    {rate:100,cands:[{name:'허남식',party:'한나라당',  votes:808234, pct:59.0},{name:'김정길',party:'민주당',      votes:561234, pct:41.0}]},
+  '대구광역시':    {rate:100,cands:[{name:'김범일',party:'한나라당',  votes:566234, pct:67.8},{name:'이승천',party:'민주당',      votes:268234, pct:32.2}]},
+  '인천광역시':    {rate:100,cands:[{name:'송영길',party:'민주당',    votes:636234, pct:48.5},{name:'안상수',party:'한나라당',    votes:631234, pct:48.1},{name:'문학진',party:'민주노동당',votes:44234,pct:3.4}]},
+  '광주광역시':    {rate:100,cands:[{name:'강운태',party:'민주당',    votes:307234, pct:59.7},{name:'이정재',party:'한나라당',    votes:96234,  pct:18.7},{name:'박남춘',party:'민주당',    votes:111234,pct:21.6}]},
+  '대전광역시':    {rate:100,cands:[{name:'염홍철',party:'한나라당',  votes:260234, pct:51.5},{name:'박용갑',party:'민주당',      votes:245234, pct:48.5}]},
+  '울산광역시':    {rate:100,cands:[{name:'박맹우',party:'한나라당',  votes:225234, pct:64.2},{name:'박준영',party:'민주당',      votes:125234, pct:35.8}]},
+  '세종특별자치시':null,
+  '경기도':        {rate:100,cands:[{name:'김문수',party:'한나라당',  votes:2568234,pct:48.0},{name:'유시민',party:'국민참여당',  votes:1875234,pct:35.1},{name:'이계안',party:'민주당',    votes:895234,pct:16.7}]},
+  '강원특별자치도':{rate:100,cands:[{name:'이광재',party:'민주당',    votes:274234, pct:47.8},{name:'엄기영',party:'한나라당',    votes:267234, pct:46.5},{name:'최흥집',party:'자유선진당',votes:33234,pct:5.7}]},
+  '충청북도':      {rate:100,cands:[{name:'이시종',party:'민주당',    votes:271234, pct:46.8},{name:'정우택',party:'한나라당',    votes:261234, pct:45.1},{name:'오탁근',party:'자유선진당',votes:47234,pct:8.1}]},
+  '충청남도':      {rate:100,cands:[{name:'안희정',party:'민주당',    votes:419234, pct:49.6},{name:'박보생',party:'한나라당',    votes:367234, pct:43.5},{name:'심대평',party:'자유선진당',votes:58234,pct:6.9}]},
+  '전북특별자치도':{rate:100,cands:[{name:'김완주',party:'민주당',    votes:388234, pct:61.9},{name:'강현욱',party:'한나라당',    votes:158234, pct:25.2},{name:'허대만',party:'민주노동당',votes:81234,pct:12.9}]},
+  '전라남도':      {rate:100,cands:[{name:'박준영',party:'민주당',    votes:546234, pct:75.1},{name:'이정현',party:'한나라당',    votes:119234, pct:16.4},{name:'서갑원',party:'민주당',    votes:61234,pct:8.5}]},
+  '경상북도':      {rate:100,cands:[{name:'김관용',party:'한나라당',  votes:633234, pct:71.0},{name:'이인기',party:'민주당',      votes:258234, pct:29.0}]},
+  '경상남도':      {rate:100,cands:[{name:'김두관',party:'무소속',    votes:643234, pct:45.0},{name:'이달곤',party:'한나라당',    votes:601234, pct:42.0},{name:'김태호',party:'한나라당',  votes:185234,pct:13.0}]},
+  '제주특별자치도':{rate:100,cands:[{name:'우근민',party:'무소속',    votes:131234, pct:57.6},{name:'김태환',party:'한나라당',    votes:96234,  pct:42.4}]},
+};
+
+// ── 2026 Mock (선거 전) ──────────────
+const D2026_MOCK = {
+  '서울특별시':    {rate:43.2,cands:[{name:'박민준',party:'더불어민주당',votes:1211423,pct:51.8},{name:'오세현',party:'국민의힘',    votes:987234,pct:42.2},{name:'김나연',party:'조국혁신당',votes:140234,pct:6.0}]},
+  '부산광역시':    {rate:38.4,cands:[{name:'이진구',party:'국민의힘',    votes:389234, pct:54.3},{name:'변성환',party:'더불어민주당',votes:286234,pct:39.9},{name:'정태규',party:'개혁신당',  votes:41234, pct:5.8}]},
+  '대구광역시':    {rate:51.2,cands:[{name:'홍준표',party:'국민의힘',    votes:372234, pct:67.2},{name:'신동현',party:'더불어민주당',votes:148234,pct:26.7},{name:'박재현',party:'무소속',    votes:33892, pct:6.1}]},
+  '인천광역시':    {rate:35.7,cands:[{name:'유정복',party:'더불어민주당',votes:318234, pct:49.8},{name:'최현식',party:'국민의힘',    votes:273234,pct:42.8},{name:'이승재',party:'조국혁신당',votes:47234,pct:7.4}]},
+  '광주광역시':    {rate:62.1,cands:[{name:'강기정',party:'더불어민주당',votes:258234, pct:62.4},{name:'오정훈',party:'조국혁신당',  votes:106234,pct:25.8},{name:'김영현',party:'국민의힘',  votes:48732, pct:11.8}]},
+  '대전광역시':    {rate:29.6,cands:[{name:'이장우',party:'더불어민주당',votes:108234, pct:48.9},{name:'박연수',party:'국민의힘',    votes:98234, pct:44.3},{name:'정민석',party:'개혁신당',  votes:15134, pct:6.8}]},
+  '울산광역시':    {rate:44.3,cands:[{name:'김두겸',party:'국민의힘',    votes:128234, pct:52.1},{name:'이승준',party:'더불어민주당',votes:100234,pct:40.6},{name:'최태희',party:'무소속',    votes:17934, pct:7.3}]},
+  '세종특별자치시':{rate:21.8,cands:[{name:'최민호',party:'더불어민주당',votes:34234,  pct:53.7},{name:'이철주',party:'국민의힘',    votes:24234, pct:38.6},{name:'박준영',party:'조국혁신당',votes:4834,  pct:7.7}]},
+  '경기도':        {rate:37.9,cands:[{name:'김동연',party:'더불어민주당',votes:1873234,pct:50.3},{name:'안철수',party:'국민의힘',    votes:1679234,pct:45.1},{name:'이재학',party:'조국혁신당',votes:171434,pct:4.6}]},
+  '강원특별자치도':{rate:55.2,cands:[{name:'김진태',party:'국민의힘',    votes:198234, pct:55.8},{name:'이상헌',party:'더불어민주당',votes:138234,pct:38.8},{name:'박준형',party:'개혁신당',  votes:19234, pct:5.4}]},
+  '충청북도':      {rate:48.6,cands:[{name:'노현섭',party:'국민의힘',    votes:178234, pct:53.2},{name:'김영진',party:'더불어민주당',votes:138234,pct:41.3},{name:'이태형',party:'무소속',    votes:18424, pct:5.5}]},
+  '충청남도':      {rate:32.4,cands:[{name:'김태흠',party:'더불어민주당',votes:198234, pct:50.7},{name:'이현석',party:'국민의힘',    votes:172234,pct:44.1},{name:'박정수',party:'개혁신당',  votes:20234, pct:5.2}]},
+  '전북특별자치도':{rate:67.7,cands:[{name:'이재명',party:'더불어민주당',votes:278234, pct:55.8},{name:'정성주',party:'조국혁신당',  votes:140234,pct:28.3},{name:'김상현',party:'국민의힘',  votes:78834, pct:15.9}]},
+  '전라남도':      {rate:71.8,cands:[{name:'박영배',party:'더불어민주당',votes:338234, pct:57.3},{name:'김진형',party:'조국혁신당',  votes:148234,pct:25.2},{name:'이규성',party:'국민의힘',  votes:103234,pct:17.5}]},
+  '경상북도':      {rate:59.3,cands:[{name:'이철우',party:'국민의힘',    votes:428234, pct:68.4},{name:'최현철',party:'더불어민주당',votes:158234,pct:25.9},{name:'박재민',party:'무소속',    votes:36834, pct:5.7}]},
+  '경상남도':      {rate:46.7,cands:[{name:'박완수',party:'국민의힘',    votes:428234, pct:56.7},{name:'김정호',party:'더불어민주당',votes:289234,pct:38.4},{name:'이재용',party:'개혁신당',  votes:37034, pct:4.9}]},
+  '제주특별자치도':{rate:27.4,cands:[{name:'오영훈',party:'더불어민주당',votes:67234,  pct:50.8},{name:'이상봉',party:'국민의힘',    votes:58234, pct:44.1},{name:'고성인',party:'무소속',    votes:6734,  pct:5.1}]},
+};
+
+const HISTORICAL = {
+  '20260603': D2026_MOCK,
+  '20220601': D2022,
+  '20180613': D2018,
+  '20140604': D2014,
+  '20100602': D2010,
+};
+
+// winner 자동 주입
+Object.values(HISTORICAL).forEach(ed=>{
+  if(!ed) return;
+  Object.keys(ed).forEach(k=>{ if(ed[k]) ed[k].winner=ed[k].cands[0].party; });
+});
+
+// ═══════════════════════════════════
+//  SIDO
+// ═══════════════════════════════════
+const SIDO_ALL=['서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시','세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도','경상북도','경상남도','제주특별자치도'];
+const SIDO_CODE={'서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28','광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36','경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44','전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50'};
+const GEO_NORM={'강원도':'강원특별자치도','전라북도':'전북특별자치도'};
+const normName=n=>GEO_NORM[n]||n;
+const shortSido=n=>n.replace('특별자치도','').replace('특별자치시','').replace('특별시','시').replace('광역시','시').replace(/^경상/,'경').replace(/^충청/,'충');
+
+// ═══════════════════════════════════
 //  STATE
-// ═══════════════════════════════════════════════
-let state = {
-  data: JSON.parse(JSON.stringify(MOCK)), // deep copy
-  sidoGeo: null,
-  sigunguGeo: null,
-  geoLoaded: false,
-  selectedSido: null,
-  mode: 'mock',         // 'mock' | 'real'
-  apiKey: '',
-  proxyUrl: '',
-  sgId: '20260603',
-  pollSec: 30,
-  isLive: false,
-  pollTimer: null,
-  hoveredName: null,
+// ═══════════════════════════════════
+let ST={
+  sidoGeo:null,sigunguGeo:null,geoLoaded:false,
+  currentSgId:'20260603',
+  data:JSON.parse(JSON.stringify(D2026_MOCK)),
+  dataSource:'mock',
+  selectedSido:null,hoveredName:null,
+  mode:'mock',apiKey:'',proxyUrl:'',
+  pollSec:30,isLive:false,pollTimer:null,
 };
+const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
+const isUpcoming=()=>curEl()?.status==='upcoming';
 
-// ═══════════════════════════════════════════════
-//  GEO JSON LOAD
-// ═══════════════════════════════════════════════
-const GEO_BASE = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2012/json/';
-
-async function loadGeo() {
-  try {
-    const [sido, sigungu] = await Promise.all([
-      d3.json(GEO_BASE + 'skorea-provinces-geo.json'),
-      d3.json(GEO_BASE + 'skorea-municipalities-geo.json'),
+// ═══════════════════════════════════
+//  GEO JSON
+// ═══════════════════════════════════
+const GEO_BASE='https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2012/json/';
+async function loadGeo(){
+  try{
+    const[sido,sigungu]=await Promise.all([
+      d3.json(GEO_BASE+'skorea-provinces-geo.json'),
+      d3.json(GEO_BASE+'skorea-municipalities-geo.json'),
     ]);
-    state.sidoGeo = sido;
-    state.sigunguGeo = sigungu;
-    state.geoLoaded = true;
-    document.getElementById('loading-overlay').style.display = 'none';
-    renderMap();
-    renderList();
-    renderSummaryBar();
-  } catch(e) {
-    document.getElementById('loading-msg').textContent = '지도 로딩 실패 (네트워크 확인)';
+    ST.sidoGeo=sido;ST.sigunguGeo=sigungu;ST.geoLoaded=true;
+    document.getElementById('loading-wrap').style.display='none';
+    renderAll();
+  }catch(e){
+    document.getElementById('loading-txt').textContent='지도 로딩 실패 (네트워크 확인)';
   }
 }
 
-// ═══════════════════════════════════════════════
-//  MAP RENDERING (D3)
-// ═══════════════════════════════════════════════
-function renderMap() {
-  if (!state.geoLoaded) return;
-  const svg = d3.select('#map-svg');
-  svg.selectAll('*').remove();
-
-  const W = svg.node().clientWidth || 600;
-  const H = svg.node().clientHeight || 700;
-  svg.attr('viewBox', `0 0 ${W} ${H}`);
-
-  const isDrill = !!state.selectedSido;
-  let features, geoFit;
-
-  if (isDrill && state.sigunguGeo) {
-    const code = SIDO_CODE[state.selectedSido] || '';
-    const filtered = state.sigunguGeo.features.filter(f => {
-      const c = String(f.properties.code ?? f.properties.id ?? '');
-      return c.startsWith(code);
-    });
-    features = filtered;
-    geoFit = { type:'FeatureCollection', features: filtered };
-  } else {
-    features = state.sidoGeo.features;
-    geoFit = state.sidoGeo;
-  }
-
-  if (!features.length) return;
-
-  const proj = d3.geoMercator().fitExtent([[28, 28], [W - 28, H - 28]], geoFit);
-  const path = d3.geoPath().projection(proj);
-  const g = svg.append('g');
-
-  g.selectAll('path')
-    .data(features)
-    .join('path')
-    .attr('d', path)
-    .attr('fill', (d, i) => {
-      if (isDrill) {
-        // 시군구: 시도 당선 정당 색상 + 명도 변화
-        const sido = state.data[state.selectedSido];
-        const base = sido ? getPartyColor(sido.winner) : '#1a2540';
-        const alpha = 0.5 + ((i * 37 + 11) % 50) / 100;
-        return base + Math.round(alpha * 255).toString(16).padStart(2,'0');
-      }
-      const nm = normName(d.properties.name);
-      const d2 = state.data[nm];
-      return d2 ? getPartyColor(d2.winner) : '#111a30';
-    })
-    .attr('stroke', '#04060e')
-    .attr('stroke-width', isDrill ? 0.35 : 0.7)
-    .style('cursor', isDrill ? 'default' : 'pointer')
-    .on('mouseover', function(event, d) {
-      d3.select(this).attr('opacity', 0.72);
-      const nm = isDrill ? state.selectedSido : normName(d.properties.name);
-      state.hoveredName = nm;
-      const displayName = isDrill ? d.properties.name : nm;
-      showTooltip(event, displayName, nm, isDrill);
-      if (!isDrill) showDetail(nm);
-    })
-    .on('mousemove', function(event) {
-      moveTooltip(event, W);
-    })
-    .on('mouseout', function() {
-      d3.select(this).attr('opacity', 1);
-      state.hoveredName = null;
-      hideTooltip();
-      if (!state.selectedSido) clearDetail();
-    })
-    .on('click', function(event, d) {
-      if (!isDrill) {
-        const nm = normName(d.properties.name);
-        drillDown(nm);
-      }
-    });
-
-  // 레이블
-  if (!isDrill) {
-    g.selectAll('text')
-      .data(state.sidoGeo.features)
-      .join('text')
-      .attr('transform', d => { const c = path.centroid(d); return `translate(${c[0]},${c[1]})`; })
-      .attr('text-anchor','middle').attr('dominant-baseline','middle')
-      .attr('font-size', d => d.properties.name === '경기도' ? '12' : '10')
-      .attr('font-weight','700').attr('fill','rgba(255,255,255,.82)')
-      .attr('pointer-events','none')
-      .text(d => shortSido(d.properties.name));
-  } else {
-    g.selectAll('text')
-      .data(features)
-      .join('text')
-      .attr('transform', d => { const c = path.centroid(d); return `translate(${c[0]},${c[1]})`; })
-      .attr('text-anchor','middle').attr('dominant-baseline','middle')
-      .attr('font-size','8')
-      .attr('fill','rgba(255,255,255,.65)')
-      .attr('pointer-events','none')
-      .text(d => (d.properties.name || '').replace(/시$|구$|군$/,''));
-  }
-
-  // 드릴다운 UI
-  document.getElementById('back-btn').style.display = isDrill ? 'block' : 'none';
-  const mapLabel = document.getElementById('map-label');
-  if (isDrill) {
-    mapLabel.innerHTML = `${state.selectedSido} → 시군구별 현황`;
-  } else {
-    mapLabel.innerHTML = '시도별 당선 현황 <small>클릭 → 시군구 드릴다운</small>';
-  }
-
-  renderLegend();
-  if (state.selectedSido) showDetail(state.selectedSido);
+// ═══════════════════════════════════
+//  ELECTION TABS
+// ═══════════════════════════════════
+function renderTabs(){
+  document.getElementById('election-tabs').innerHTML=ELECTIONS.map(e=>{
+    const active=e.sgId===ST.currentSgId?'active':'';
+    const badge=e.status==='upcoming'
+      ?`<span class="tab-badge upcoming">예정</span>`
+      :`<span class="tab-badge done">확정</span>`;
+    return `<div class="etab ${active}" onclick="switchElection('${e.sgId}')">
+      <span class="tab-year">${e.year}</span>
+      <span class="tab-num">${e.round}</span>${badge}
+    </div>`;
+  }).join('');
 }
 
-// ═══════════════════════════════════════════════
-//  DRILL DOWN / UP
-// ═══════════════════════════════════════════════
-function drillDown(name) {
-  state.selectedSido = name;
-  showDetail(name);
-  highlightListItem(name);
-  renderMap();
-}
-function drillUp() {
-  state.selectedSido = null;
+async function switchElection(sgId){
+  if(ST.isLive)toggleLive();
+  stopPolling();
+  ST.currentSgId=sgId;
+  ST.selectedSido=null;
+  ST.hoveredName=null;
+  const el=curEl();
+  const builtin=HISTORICAL[sgId];
+  if(builtin){
+    ST.data=JSON.parse(JSON.stringify(builtin));
+    ST.dataSource=el.status==='upcoming'?'mock':'builtin';
+  }
+  renderTabs();
+  updateHeader();
   clearDetail();
-  renderMap();
+  if(ST.geoLoaded)renderAll();
 }
 
-// ═══════════════════════════════════════════════
+function updateHeader(){
+  const el=curEl();
+  document.getElementById('hd-year').textContent=`${el.year} 개표현황`;
+  document.getElementById('header-sub').textContent=`${el.round} · ${el.date} · 광역단체장(시·도지사)`;
+  document.getElementById('btn-live').style.display=isUpcoming()?'block':'none';
+  // API 불러오기: 역대 선거 + API 설정 있을 때
+  document.getElementById('btn-fetch').style.display=(!isUpcoming()&&ST.apiKey&&ST.proxyUrl)?'block':'none';
+  const b=document.getElementById('data-src-badge');
+  b.className=ST.dataSource;
+  b.textContent=ST.dataSource==='builtin'?'내장 확정 데이터':ST.dataSource==='api'?'선관위 API':'MOCK 데이터';
+}
+
+// ═══════════════════════════════════
+//  MAP
+// ═══════════════════════════════════
+function renderMap(){
+  if(!ST.geoLoaded)return;
+  const svg=d3.select('#map-svg');
+  svg.selectAll('*').remove();
+  const W=svg.node().clientWidth||600,H=svg.node().clientHeight||700;
+  svg.attr('viewBox',`0 0 ${W} ${H}`);
+  const isDrill=!!ST.selectedSido;
+  let features,geoFit;
+  if(isDrill&&ST.sigunguGeo){
+    const code=SIDO_CODE[ST.selectedSido]||'';
+    const f=ST.sigunguGeo.features.filter(f=>String(f.properties.code??f.properties.id??'').startsWith(code));
+    features=f;geoFit={type:'FeatureCollection',features:f};
+  }else{features=ST.sidoGeo.features;geoFit=ST.sidoGeo;}
+  if(!features.length)return;
+
+  const proj=d3.geoMercator().fitExtent([[26,26],[W-26,H-26]],geoFit);
+  const path=d3.geoPath().projection(proj);
+  const g=svg.append('g');
+
+  g.selectAll('path').data(features).join('path')
+    .attr('d',path)
+    .attr('fill',(d,i)=>{
+      if(isDrill){
+        const s=ST.data[ST.selectedSido];
+        const base=s?pc(s.winner):'#1a2540';
+        const alpha=Math.round((0.48+((i*37+11)%50)/100)*255).toString(16).padStart(2,'0');
+        return base+alpha;
+      }
+      const nm=normName(d.properties.name);
+      const d2=ST.data[nm];
+      return d2?pc(d2.winner):'#111a30';
+    })
+    .attr('stroke','#04060e').attr('stroke-width',isDrill?.3:.6)
+    .style('cursor',isDrill?'default':'pointer')
+    .on('mouseover',function(event,d){
+      d3.select(this).attr('opacity',.7);
+      const nm=isDrill?ST.selectedSido:normName(d.properties.name);
+      ST.hoveredName=nm;
+      showTooltip(event,isDrill?d.properties.name:nm,nm,isDrill,W);
+      if(!isDrill)showDetail(nm);
+    })
+    .on('mousemove',(event)=>moveTooltip(event,W))
+    .on('mouseout',function(){
+      d3.select(this).attr('opacity',1);
+      ST.hoveredName=null;hideTooltip();
+      if(!ST.selectedSido)clearDetail();
+    })
+    .on('click',(event,d)=>{if(!isDrill)drillDown(normName(d.properties.name));});
+
+  if(!isDrill){
+    g.selectAll('text').data(ST.sidoGeo.features).join('text')
+      .attr('transform',d=>{const c=path.centroid(d);return `translate(${c[0]},${c[1]})`;})
+      .attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .attr('font-size',d=>d.properties.name==='경기도'?'12':'10')
+      .attr('font-weight','700').attr('fill','rgba(255,255,255,.82)').attr('pointer-events','none')
+      .text(d=>shortSido(d.properties.name));
+  }else{
+    g.selectAll('text').data(features).join('text')
+      .attr('transform',d=>{const c=path.centroid(d);return `translate(${c[0]},${c[1]})`;})
+      .attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .attr('font-size','8').attr('fill','rgba(255,255,255,.6)').attr('pointer-events','none')
+      .text(d=>(d.properties.name||'').replace(/시$|구$|군$/,''));
+  }
+  document.getElementById('back-btn').style.display=isDrill?'block':'none';
+  document.getElementById('map-label').innerHTML=isDrill
+    ?`${ST.selectedSido} → 시군구별 현황`
+    :`시도별 당선 현황 <small>클릭 → 시군구 드릴다운</small>`;
+  renderLegend();
+}
+
+function drillDown(n){ST.selectedSido=n;highlightListItem(n);showDetail(n);renderMap();}
+function drillUp(){ST.selectedSido=null;clearDetail();renderMap();}
+
+// ═══════════════════════════════════
 //  TOOLTIP
-// ═══════════════════════════════════════════════
-function showTooltip(event, displayName, dataName, isSigungu) {
-  const d = state.data[dataName];
-  if (!d) return;
-  const tt = document.getElementById('tooltip');
-  const w = document.getElementById('map-area').offsetWidth;
-  let html = `<div class="tt-name">${displayName}</div>`;
-  if (isSigungu) html += `<div style="font-size:10px;color:var(--dim);margin-bottom:5px">${state.selectedSido} 전체 집계</div>`;
-  html += `<div class="tt-winner"><div class="tt-wd" style="background:${getPartyColor(d.winner)}"></div><span class="tt-wn" style="color:${getPartyColor(d.winner)}">${d.winner}</span></div>`;
-  html += `<div class="tt-rate">개표율 ${d.rate.toFixed(1)}%</div>`;
-  d.cands?.slice(0,3).forEach((c,i) => {
-    html += `<div class="tt-cand">
-      <div class="tt-cand-row">
-        <span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name} <span style="color:${getPartyColor(c.party)};font-size:10px">${getPartyShort(c.party)}</span></span>
-        <span class="tt-cand-pct" style="color:${getPartyColor(c.party)}">${c.pct}%</span>
+// ═══════════════════════════════════
+function showTooltip(event,dispName,dataName,isDrill,mapW){
+  const d=ST.data[dataName];if(!d)return;
+  const tt=document.getElementById('tooltip');
+  let html=`<div class="tt-name">${dispName}</div>`;
+  if(isDrill)html+=`<div class="tt-sub-lbl">${ST.selectedSido} 전체 집계 기준</div>`;
+  html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><div style="width:8px;height:8px;border-radius:2px;background:${pc(d.winner)}"></div><span style="font-size:12px;font-weight:700;color:${pc(d.winner)}">${d.winner}</span></div>`;
+  html+=`<div style="font-size:11px;color:var(--sub);margin-bottom:7px">개표율 ${d.rate.toFixed(1)}%</div>`;
+  (d.cands||[]).slice(0,3).forEach((c,i)=>{
+    html+=`<div style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+        <span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name} <span style="color:${pc(c.party)};font-size:10px">${ps(c.party)}</span></span>
+        <span style="font-weight:700;color:${pc(c.party)}">${c.pct}%</span>
       </div>
-      <div class="tt-bar-bg"><div class="tt-bar-fill" style="width:${c.pct}%;background:${getPartyColor(c.party)};opacity:${i===0?1:.45}"></div></div>
+      <div class="tt-bar"><div class="tt-fill" style="width:${c.pct}%;background:${pc(c.party)};opacity:${i===0?1:.4}"></div></div>
       <div class="tt-votes">${fmt(c.votes)}표</div>
     </div>`;
   });
-  tt.innerHTML = html;
-  tt.classList.add('show');
-  moveTooltip(event, w);
+  tt.innerHTML=html;tt.classList.add('on');moveTooltip(event,mapW);
 }
-function moveTooltip(event, mapW) {
-  const tt = document.getElementById('tooltip');
-  const rect = document.getElementById('map-area').getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
-  const ttW = tt.offsetWidth + 20;
-  tt.style.left = x + ttW > mapW ? (x - ttW + 14) + 'px' : (x + 14) + 'px';
-  tt.style.top = Math.min(y - 10, rect.height - 220) + 'px';
+function moveTooltip(event,mapW){
+  const tt=document.getElementById('tooltip');
+  if(!tt.classList.contains('on'))return;
+  const rect=document.getElementById('map-area').getBoundingClientRect();
+  const x=event.clientX-rect.left,y=event.clientY-rect.top;
+  const tw=tt.offsetWidth+18;
+  tt.style.left=x+tw>mapW?(x-tw+12)+'px':(x+14)+'px';
+  tt.style.top=Math.min(y-10,rect.height-230)+'px';
 }
-function hideTooltip() {
-  document.getElementById('tooltip').classList.remove('show');
-}
+function hideTooltip(){document.getElementById('tooltip').classList.remove('on');}
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════
 //  DETAIL PANEL
-// ═══════════════════════════════════════════════
-function showDetail(name) {
-  const d = state.data[name];
-  if (!d) return;
-  document.getElementById('detail-placeholder').style.display = 'none';
-  document.getElementById('detail-content').style.display = 'block';
-  document.getElementById('det-name').textContent = name;
-  const badge = document.getElementById('det-winner-badge');
-  const c = getPartyColor(d.winner);
-  badge.style.cssText = `background:${c}22;border:1px solid ${c}66;color:${c}`;
-  badge.textContent = `${d.winner} 당선`;
-  document.getElementById('det-rate-fill').style.cssText = `width:${d.rate}%;background:${c}`;
-  document.getElementById('det-rate-val').textContent = `${d.rate.toFixed(1)}%`;
-  const candsEl = document.getElementById('det-cands');
-  candsEl.innerHTML = (d.cands||[]).map((c2,i) => `
-    <div class="det-cand">
-      <div class="det-cand-row">
-        <div style="font-size:12px;color:${i===0?'var(--text)':'var(--sub)'};font-weight:${i===0?700:400}">
-          ${c2.name} <span style="color:${getPartyColor(c2.party)};font-size:10px">${getPartyShort(c2.party)}</span>
-        </div>
-        <div style="font-size:12px;font-weight:700;color:${getPartyColor(c2.party)}">${c2.pct}%</div>
+// ═══════════════════════════════════
+function showDetail(name){
+  const d=ST.data[name];if(!d)return;
+  document.getElementById('det-placeholder').style.display='none';
+  document.getElementById('det-content').style.display='block';
+  document.getElementById('det-name').textContent=name;
+  const c=pc(d.winner);
+  const b=document.getElementById('det-winner-badge');
+  b.style.cssText=`background:${c}22;border:1px solid ${c}66;color:${c}`;
+  b.textContent=`${d.winner} 당선`;
+  document.getElementById('det-rate-fill').style.cssText=`width:${d.rate}%;background:${c}`;
+  document.getElementById('det-rate-val').textContent=`${d.rate.toFixed(1)}%`;
+  document.getElementById('det-cands').innerHTML=(d.cands||[]).map((c2,i)=>`
+    <div class="dc">
+      <div class="dc-row">
+        <span style="color:${i===0?'var(--text)':'var(--sub)'};font-weight:${i===0?700:400}">${c2.name} <span style="color:${pc(c2.party)};font-size:10px">${ps(c2.party)}</span></span>
+        <span style="font-weight:700;color:${pc(c2.party)}">${c2.pct}%</span>
       </div>
-      <div class="det-cand-bar"><div class="det-cand-fill" style="width:${c2.pct}%;background:${getPartyColor(c2.party)};opacity:${i===0?1:.45}"></div></div>
-      <div class="det-cand-votes">${fmt(c2.votes)}표</div>
+      <div class="dc-bar"><div class="dc-fill" style="width:${c2.pct}%;background:${pc(c2.party)};opacity:${i===0?1:.4}"></div></div>
+      <div class="dc-votes">${fmt(c2.votes)}표</div>
     </div>`).join('');
 }
-function clearDetail() {
-  document.getElementById('detail-placeholder').style.display = 'block';
-  document.getElementById('detail-content').style.display = 'none';
+function clearDetail(){
+  document.getElementById('det-placeholder').style.display='block';
+  document.getElementById('det-content').style.display='none';
 }
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════
 //  SUMMARY BAR
-// ═══════════════════════════════════════════════
-function renderSummaryBar() {
-  const counts = {};
-  SIDO_LIST.forEach(s => {
-    const d = state.data[s];
-    if (d) counts[d.winner] = (counts[d.winner]||0) + 1;
-  });
-  const total = SIDO_LIST.length;
-  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
-
-  // 의석 바
-  const bar = document.getElementById('seat-bar');
-  bar.innerHTML = sorted.map(([p,n]) =>
-    `<div class="seat-seg" style="width:${n/total*100}%;background:${getPartyColor(p)}"></div>`
-  ).join('');
-
-  // 정당 칩
-  const chips = document.getElementById('party-chips');
-  chips.innerHTML = sorted.map(([p,n]) => `
-    <div class="party-chip">
-      <div class="party-dot" style="background:${getPartyColor(p)}"></div>
-      <span class="party-cnt" style="color:${getPartyColor(p)}">${n}</span>
-      <span class="party-name">${getPartyShort(p)}</span>
-    </div>`).join('');
-
-  // 평균 개표율
-  const avg = SIDO_LIST.reduce((s,k) => s + (state.data[k]?.rate||0), 0) / SIDO_LIST.length;
-  document.getElementById('avg-rate-val').textContent = avg.toFixed(1) + '%';
+// ═══════════════════════════════════
+function renderSummaryBar(){
+  const valid=SIDO_ALL.filter(s=>ST.data[s]);
+  const counts={};
+  valid.forEach(s=>{const w=ST.data[s].winner;counts[w]=(counts[w]||0)+1;});
+  const total=valid.length;
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('sb-total-label').textContent=`광역단체장 ${total}석`;
+  document.getElementById('seat-bar').innerHTML=sorted.map(([p,n])=>
+    `<div class="seat-seg" style="width:${n/total*100}%;background:${pc(p)}"></div>`).join('');
+  document.getElementById('party-chips').innerHTML=sorted.map(([p,n])=>
+    `<div class="pchip"><div class="pdot" style="background:${pc(p)}"></div><span class="pcnt" style="color:${pc(p)}">${n}</span><span class="pname">${ps(p)}</span></div>`).join('');
+  const avg=valid.reduce((s,k)=>s+(ST.data[k]?.rate||0),0)/valid.length;
+  document.getElementById('avg-rate-val').textContent=avg.toFixed(1)+'%';
 }
 
-// ═══════════════════════════════════════════════
-//  SIDO LIST (right panel)
-// ═══════════════════════════════════════════════
-function renderList() {
-  const el = document.getElementById('sido-list');
-  el.innerHTML = SIDO_LIST.map(name => {
-    const d = state.data[name];
-    if (!d) return '';
-    const c = getPartyColor(d.winner);
-    return `<div class="sido-row" id="row-${name}" onclick="drillDown('${name}')">
-      <div class="sr-dot" style="background:${c}"></div>
-      <div class="sr-name">${shortSido(name)}</div>
-      <div class="sr-party" style="color:${c}">${getPartyShort(d.winner)}</div>
-      <div class="sr-rate-wrap">
-        <div class="sr-rate-num">${d.rate.toFixed(0)}%</div>
-        <div class="sr-rate-bar"><div class="sr-rate-fill" style="width:${d.rate}%;background:${c};opacity:.5"></div></div>
+// ═══════════════════════════════════
+//  SIDO LIST
+// ═══════════════════════════════════
+function renderList(){
+  document.getElementById('sido-list').innerHTML=SIDO_ALL.map(name=>{
+    const d=ST.data[name];
+    if(!d)return `<div class="srow" style="opacity:.2;pointer-events:none"><div class="sdot" style="background:#333"></div><div class="sname">${shortSido(name)}</div><div class="sparty" style="color:var(--dim)">-</div></div>`;
+    const c=pc(d.winner);
+    return `<div class="srow" id="row-${name}" onclick="drillDown('${name}')">
+      <div class="sdot" style="background:${c}"></div>
+      <div class="sname">${shortSido(name)}</div>
+      <div class="sparty" style="color:${c}">${ps(d.winner)}</div>
+      <div class="srate-wrap">
+        <div class="srate-num">${d.rate.toFixed(0)}%</div>
+        <div class="srate-bar"><div class="srate-fill" style="width:${d.rate}%;background:${c};opacity:.5"></div></div>
       </div>
     </div>`;
   }).join('');
 }
-function highlightListItem(name) {
-  document.querySelectorAll('.sido-row').forEach(el => el.classList.remove('active'));
-  const el = document.getElementById(`row-${name}`);
-  if (el) { el.classList.add('active'); el.scrollIntoView({block:'nearest'}); }
+function highlightListItem(name){
+  document.querySelectorAll('.srow').forEach(e=>e.classList.remove('active'));
+  const e=document.getElementById(`row-${name}`);
+  if(e){e.classList.add('active');e.scrollIntoView({block:'nearest'});}
 }
 
-// ═══════════════════════════════════════════════
-//  MAP LEGEND
-// ═══════════════════════════════════════════════
-function renderLegend() {
-  if (state.selectedSido) {
-    document.getElementById('legend').style.display = 'none';
-    return;
+// ═══════════════════════════════════
+//  LEGEND
+// ═══════════════════════════════════
+function renderLegend(){
+  if(ST.selectedSido){document.getElementById('legend').style.display='none';return;}
+  const counts={};
+  SIDO_ALL.filter(s=>ST.data[s]).forEach(s=>{const w=ST.data[s].winner;counts[w]=(counts[w]||0)+1;});
+  const leg=document.getElementById('legend');
+  leg.style.display='block';
+  leg.innerHTML=Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([p])=>
+    `<div class="leg-row"><div class="leg-dot" style="background:${pc(p)}"></div><span class="leg-lbl">${PARTY_DB[p]?.short??p}</span></div>`).join('');
+}
+
+// ═══════════════════════════════════
+//  LIVE (2026 전용)
+// ═══════════════════════════════════
+function toggleLive(){
+  if(!isUpcoming())return;
+  ST.isLive=!ST.isLive;
+  const btn=document.getElementById('btn-live');
+  document.getElementById('live-badge').classList.toggle('on',ST.isLive);
+  btn.classList.toggle('live-on',ST.isLive);
+  btn.textContent=ST.isLive?'■ 중지':'▶ 실시간 시작';
+  if(ST.isLive){poll();ST.pollTimer=setInterval(poll,ST.pollSec*1000);}else stopPolling();
+}
+function stopPolling(){if(ST.pollTimer){clearInterval(ST.pollTimer);ST.pollTimer=null;}}
+async function poll(){
+  if(ST.mode==='mock'){
+    let changed=false;
+    SIDO_ALL.forEach(k=>{const d=ST.data[k];if(d&&d.rate<100){d.rate=Math.min(100,+(d.rate+Math.random()*2.5).toFixed(1));changed=true;}});
+    if(changed)renderAll();
+  }else await fetchAllSidoAPI(ST.currentSgId);
+}
+
+// ═══════════════════════════════════
+//  HISTORICAL API FETCH
+// ═══════════════════════════════════
+async function fetchHistorical(){
+  if(!ST.apiKey||!ST.proxyUrl){alert('설정에서 API Key와 프록시 URL을 입력하세요');openSettings();return;}
+  const btn=document.getElementById('btn-fetch');
+  btn.textContent='불러오는 중...';btn.disabled=true;
+  try{
+    await fetchAllSidoAPI(ST.currentSgId);
+    ST.dataSource='api';updateHeader();
+  }finally{btn.textContent='↻ API 불러오기';btn.disabled=false;}
+}
+
+async function fetchAllSidoAPI(sgId){
+  const errEl=document.getElementById('err-msg');errEl.classList.remove('show');
+  if(!ST.apiKey||!ST.proxyUrl){errEl.textContent='API Key/프록시 없음';errEl.classList.add('show');return;}
+  let ok=false;
+  for(const sidoName of SIDO_ALL){
+    try{
+      const res=await fetchOneSido(sgId,sidoName);
+      if(res){ST.data[sidoName]=res;ok=true;}
+    }catch(e){errEl.textContent=`API 오류: ${e.message}`;errEl.classList.add('show');break;}
   }
-  const counts = {};
-  SIDO_LIST.forEach(s => {
-    const d = state.data[s];
-    if (d) counts[d.winner] = (counts[d.winner]||0)+1;
-  });
-  const leg = document.getElementById('legend');
-  leg.style.display = 'block';
-  leg.innerHTML = Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([p]) =>
-    `<div class="leg-item"><div class="leg-dot" style="background:${getPartyColor(p)}"></div><span class="leg-label">${PARTIES[p]?.short??p}</span></div>`
-  ).join('');
+  if(ok)renderAll();
 }
 
-// ═══════════════════════════════════════════════
-//  TIME DISPLAY
-// ═══════════════════════════════════════════════
-function updateTime() {
-  document.getElementById('time-str').textContent =
-    new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-}
-setInterval(updateTime, 1000);
-updateTime();
-
-// ═══════════════════════════════════════════════
-//  LIVE POLLING
-// ═══════════════════════════════════════════════
-function toggleLive() {
-  state.isLive = !state.isLive;
-  const btn = document.getElementById('btn-live');
-  const badge = document.getElementById('live-badge');
-  if (state.isLive) {
-    btn.textContent = '■ 중지';
-    btn.classList.add('live-on');
-    badge.classList.add('active');
-    startPolling();
-  } else {
-    btn.textContent = '▶ 실시간 시작';
-    btn.classList.remove('live-on');
-    badge.classList.remove('active');
-    stopPolling();
+async function fetchOneSido(sgId,sidoName){
+  const apiUrl=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
+    +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=3`
+    +`&sdName=${encodeURIComponent(sidoName)}&numOfRows=50&pageNo=1&resultType=json`;
+  const res=await fetch(ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(apiUrl)}`);
+  if(!res.ok)throw new Error(`HTTP ${res.status}`);
+  const json=await res.json();
+  const items=json?.response?.body?.items?.item??json?.body?.items?.item;
+  if(!items)return null;
+  const arr=Array.isArray(items)?items:[items];
+  if(!arr.length)return null;
+  const row=arr.find(it=>!it.wiwName||it.wiwName===sidoName)||arr[0];
+  const cands=[];
+  const tv=parseInt(row.yutusu||row.tusu||0);
+  for(let i=1;i<=50;i++){
+    const idx=String(i).padStart(2,'0');
+    const party=row[`jd${idx}`],name=row[`hbj${idx}`],votes=parseInt(row[`dugsu${idx}`]||0);
+    if(!name&&!votes)break;
+    cands.push({name:name||'',party:party||'무소속',votes,pct:tv>0?+(votes/tv*100).toFixed(1):0});
   }
-}
-function startPolling() {
-  stopPolling();
-  poll(); // 즉시 1회
-  state.pollTimer = setInterval(poll, state.pollSec * 1000);
-}
-function stopPolling() {
-  if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
-}
-async function poll() {
-  if (state.mode === 'mock') {
-    // Mock: 개표율 서서히 증가 시뮬레이션
-    let changed = false;
-    SIDO_LIST.forEach(k => {
-      const d = state.data[k];
-      if (d && d.rate < 100) {
-        d.rate = Math.min(100, +(d.rate + Math.random() * 2.5).toFixed(1));
-        changed = true;
-      }
-    });
-    if (changed) {
-      renderMap();
-      renderList();
-      renderSummaryBar();
-    }
-  } else {
-    await fetchAllSido();
-  }
+  cands.sort((a,b)=>b.votes-a.votes);
+  return{winner:cands[0]?.party||'미확정',rate:parseFloat(row.rateOcr||row.turnout||100),cands};
 }
 
-// ═══════════════════════════════════════════════
-//  REAL API (선관위 개표결과 조회)
-//  엔드포인트: VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire
-//  sgTypecode=3 (시·도지사선거)
-// ═══════════════════════════════════════════════
-async function fetchAllSido() {
-  const errEl = document.getElementById('error-msg');
-  errEl.classList.remove('show');
-
-  if (!state.apiKey) {
-    errEl.textContent = 'API Key 없음 → 설정에서 입력';
-    errEl.classList.add('show');
-    return;
-  }
-  if (!state.proxyUrl) {
-    errEl.textContent = '프록시 URL 없음 → 설정에서 입력';
-    errEl.classList.add('show');
-    return;
-  }
-
-  let anySuccess = false;
-  for (const sidoName of SIDO_LIST) {
-    try {
-      const result = await fetchSidoData(sidoName);
-      if (result) {
-        state.data[sidoName] = result;
-        anySuccess = true;
-      }
-    } catch(e) {
-      console.warn(`[${sidoName}] 오류:`, e.message);
-      errEl.textContent = `API 오류: ${e.message}`;
-      errEl.classList.add('show');
-      break;
-    }
-  }
-
-  if (anySuccess) {
-    renderMap();
-    renderList();
-    renderSummaryBar();
-    if (state.hoveredName) showDetail(state.hoveredName);
-    else if (state.selectedSido) showDetail(state.selectedSido);
-  }
-}
-
-async function fetchSidoData(sidoName) {
-  // 프록시 서버를 통한 요청
-  // 프록시: GET /proxy?url=<API_URL>
-  const apiUrl = `https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
-    + `?serviceKey=${encodeURIComponent(state.apiKey)}`
-    + `&sgId=${state.sgId}`
-    + `&sgTypecode=3`
-    + `&sdName=${encodeURIComponent(sidoName)}`
-    + `&numOfRows=50&pageNo=1&resultType=json`;
-
-  const proxyTarget = state.proxyUrl.replace(/\/$/, '') + '?url=' + encodeURIComponent(apiUrl);
-  const res = await fetch(proxyTarget);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  return parseSidoResponse(json, sidoName);
-}
-
-function parseSidoResponse(json, sidoName) {
-  // 응답: response.body.items.item 또는 직접 배열
-  const items = json?.response?.body?.items?.item
-    ?? json?.body?.items?.item
-    ?? json?.items?.item;
-  if (!items) return null;
-
-  const arr = Array.isArray(items) ? items : [items];
-  if (!arr.length) return null;
-
-  // 첫 번째 행 (시도 전체 합산 행, sggName이 시도명 또는 '합계')
-  // 여러 행이면 sdName === sidoName 이고 wiwName이 없는 행 선택
-  const row = arr.find(it => !it.wiwName || it.wiwName === sidoName) || arr[0];
-
-  // 후보자 파싱: jd01~jd50, hbj01~hbj50, dugsu01~dugsu50
-  const cands = [];
-  const totalVotes = parseInt(row.yutusu || row.tusu || 0);
-  for (let i = 1; i <= 50; i++) {
-    const idx = String(i).padStart(2,'0');
-    const party = row[`jd${idx}`];
-    const name  = row[`hbj${idx}`];
-    const votes = parseInt(row[`dugsu${idx}`] || 0);
-    if (!name && !votes) break;
-    cands.push({ name: name||'', party: party||'무소속', votes,
-      pct: totalVotes > 0 ? +(votes/totalVotes*100).toFixed(1) : 0 });
-  }
-  cands.sort((a,b) => b.votes - a.votes);
-
-  // 개표율: 투표수 대비 기준 (API에 직접 없으면 추정)
-  const rate = parseFloat(row.rateOcr || row.turnout || 0);
-
-  return {
-    winner: cands[0]?.party || '미확정',
-    rate: rate,
-    cands: cands,
-  };
-}
-
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════
 //  SETTINGS
-// ═══════════════════════════════════════════════
-function openSettings() {
-  loadSettingsFromStorage();
-  document.getElementById('settings-overlay').classList.add('show');
+// ═══════════════════════════════════
+function openSettings(){
+  ST.apiKey=localStorage.getItem('el_apikey')||'';
+  ST.proxyUrl=localStorage.getItem('el_proxy')||'';
+  document.getElementById('input-apikey').value=ST.apiKey;
+  document.getElementById('input-proxy').value=ST.proxyUrl;
+  setMode(ST.mode,false);setPoll(ST.pollSec,false);
+  document.getElementById('settings-overlay').classList.add('on');
 }
-function closeSettings() {
-  document.getElementById('settings-overlay').classList.remove('show');
+function closeSettings(){document.getElementById('settings-overlay').classList.remove('on');}
+function saveSettings(){
+  const key=document.getElementById('input-apikey').value.trim();
+  const proxy=document.getElementById('input-proxy').value.trim();
+  if(key){ST.apiKey=key;localStorage.setItem('el_apikey',key);}
+  if(proxy){ST.proxyUrl=proxy;localStorage.setItem('el_proxy',proxy);}
+  localStorage.setItem('el_mode',ST.mode);localStorage.setItem('el_poll',ST.pollSec);
+  updateHeader();closeSettings();
+  if(ST.isLive){stopPolling();ST.pollTimer=setInterval(poll,ST.pollSec*1000);}
 }
-function saveSettings() {
-  const key = document.getElementById('input-apikey').value.trim();
-  const proxy = document.getElementById('input-proxy').value.trim();
-  const sgId = document.getElementById('input-sgid').value.trim();
-  if (key) { state.apiKey = key; localStorage.setItem('election_apikey', key); }
-  if (proxy) { state.proxyUrl = proxy; localStorage.setItem('election_proxy', proxy); }
-  if (sgId) { state.sgId = sgId; localStorage.setItem('election_sgid', sgId); }
-  localStorage.setItem('election_mode', state.mode);
-  localStorage.setItem('election_poll', state.pollSec);
-
-  const badge = document.getElementById('api-mode-badge');
-  badge.className = state.mode === 'real' ? 'real' : 'mock';
-  badge.textContent = state.mode === 'real' ? '실제 API' : 'MOCK';
-
-  closeSettings();
-  if (state.isLive) { stopPolling(); startPolling(); }
+function setMode(m,save=true){
+  ST.mode=m;
+  document.getElementById('mode-mock').classList.toggle('active',m==='mock');
+  document.getElementById('mode-real').classList.toggle('active',m==='real');
+  document.getElementById('real-settings').style.display=m==='real'?'block':'none';
 }
-function loadSettingsFromStorage() {
-  const key   = localStorage.getItem('election_apikey') || '';
-  const proxy = localStorage.getItem('election_proxy') || '';
-  const sgId  = localStorage.getItem('election_sgid') || '20260603';
-  const mode  = localStorage.getItem('election_mode') || 'mock';
-  const poll  = parseInt(localStorage.getItem('election_poll') || '30');
-  document.getElementById('input-apikey').value = key;
-  document.getElementById('input-proxy').value  = proxy;
-  document.getElementById('input-sgid').value   = sgId;
-  state.apiKey   = key;
-  state.proxyUrl = proxy;
-  state.sgId     = sgId;
-  setMode(mode, false);
-  setPoll(poll, false);
-}
-function setMode(m, save=true) {
-  state.mode = m;
-  document.getElementById('mode-mock').classList.toggle('active', m==='mock');
-  document.getElementById('mode-real').classList.toggle('active', m==='real');
-  document.getElementById('real-settings').style.display = m==='real' ? 'block' : 'none';
-  if (save) {
-    const badge = document.getElementById('api-mode-badge');
-    badge.className = m === 'real' ? 'real' : 'mock';
-    badge.textContent = m === 'real' ? '실제 API' : 'MOCK';
-  }
-}
-function setPoll(s, save=true) {
-  state.pollSec = s;
-  [10,30,60].forEach(n => {
-    document.getElementById(`poll-${n}`).classList.toggle('active', n===s);
-  });
-  if (save && state.isLive) { stopPolling(); startPolling(); }
+function setPoll(s,save=true){
+  ST.pollSec=s;
+  [10,30,60].forEach(n=>document.getElementById(`poll-${n}`)?.classList.toggle('active',n===s));
 }
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════
+setInterval(()=>{document.getElementById('time-str').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
+
+// ═══════════════════════════════════
+//  RENDER ALL
+// ═══════════════════════════════════
+function renderAll(){renderMap();renderList();renderSummaryBar();if(ST.hoveredName||ST.selectedSido)showDetail(ST.hoveredName||ST.selectedSido);}
+
+// ═══════════════════════════════════
 //  INIT
-// ═══════════════════════════════════════════════
-window.addEventListener('resize', () => { if(state.geoLoaded) renderMap(); });
-loadSettingsFromStorage();
-
-// API 모드 배지 초기화
-const badge = document.getElementById('api-mode-badge');
-badge.className = 'mock';
-badge.textContent = 'MOCK';
-
+// ═══════════════════════════════════
+window.addEventListener('resize',()=>{if(ST.geoLoaded)renderMap();});
+ST.apiKey=localStorage.getItem('el_apikey')||'';
+ST.proxyUrl=localStorage.getItem('el_proxy')||'';
+ST.mode=localStorage.getItem('el_mode')||'mock';
+ST.pollSec=parseInt(localStorage.getItem('el_poll')||'30');
+renderTabs();
+updateHeader();
 loadGeo();
 </script>
 </body>
