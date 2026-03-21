@@ -410,7 +410,25 @@ Object.values(HISTORICAL).forEach(ed=>{
 // ═══════════════════════════════════
 const SIDO_ALL=['서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시','세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도','경상북도','경상남도','제주특별자치도'];
 const SIDO_CODE={'서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28','광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36','경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44','전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50'};
-const GEO_NORM={'강원도':'강원특별자치도','전라북도':'전북특별자치도'};
+// kostat 옛 이름 + gadm 영어 이름 → 현재 한국어 시도명 매핑
+const GEO_NORM={
+  // kostat 구버전
+  '강원도':'강원특별자치도','전라북도':'전북특별자치도',
+  // gadm NAME_1 (영어)
+  'Seoul':'서울특별시','Busan':'부산광역시','Daegu':'대구광역시',
+  'Incheon':'인천광역시','Gwangju':'광주광역시','Daejeon':'대전광역시',
+  'Ulsan':'울산광역시','Sejong':'세종특별자치시',
+  'Gyeonggi-do':'경기도','Gangwon-do':'강원특별자치도',
+  'Chungcheongbuk-do':'충청북도','Chungcheongnam-do':'충청남도',
+  'Jeollabuk-do':'전북특별자치도','Jeollanam-do':'전라남도',
+  'Gyeongsangbuk-do':'경상북도','Gyeongsangnam-do':'경상남도',
+  'Jeju':'제주특별자치도',
+  // 혹시 있을 수 있는 변형
+  'Gangwon':'강원특별자치도','Jeju-do':'제주특별자치도',
+  'North Chungcheong':'충청북도','South Chungcheong':'충청남도',
+  'North Gyeongsang':'경상북도','South Gyeongsang':'경상남도',
+  'North Jeolla':'전북특별자치도','South Jeolla':'전라남도',
+};
 const normName=n=>GEO_NORM[n]||n;
 const shortSido=n=>n.replace('특별자치도','').replace('특별자치시','').replace('특별시','시').replace('광역시','시').replace(/^경상/,'경').replace(/^충청/,'충');
 
@@ -454,7 +472,9 @@ const GEO_CANDIDATES = {
 // 소스마다 속성명 다름 → 통합 추출
 // SGIS: adm_nm/adm_cd  |  kostat: name/code  |  gadm: NAME_1/ID_1
 const getGeoName = p =>
-  p.name || p.adm_nm || p.NAME_1 || p.CTP_KOR_NM || p.SIG_KOR_NM || p.KOR_NM || '';
+  p.name || p.adm_nm || p.CTP_KOR_NM || p.SIG_KOR_NM || p.KOR_NM || p.NAME_2 || p.NAME_1 || '';
+// gadm 시도: NAME_1=영어, 시군구: NAME_2=영어 → normName으로 한국어 변환
+// kostat: name=한국어, SGIS: adm_nm=한국어
 const getGeoCode = p =>
   String(p.code || p.adm_cd || p.id || p.CTPRVN_CD || p.SIG_CD || p.ID_1 || p.id_1 || '');
 
@@ -545,7 +565,16 @@ function renderMap(){
   let features,geoFit;
   if(isDrill&&ST.sigunguGeo){
     const code=SIDO_CODE[ST.selectedSido]||'';
-    const f=ST.sigunguGeo.features.filter(f=>getGeoCode(f.properties).startsWith(code));
+    const f=ST.sigunguGeo.features.filter(f=>{
+      const c=getGeoCode(f.properties);
+      const s=f.properties.sido||'';
+      // SGIS/kostat: code로 필터, gadm: sido 속성으로 fallback
+      if(c) return c.startsWith(code);
+      if(s) return s===code||s===ST.selectedSido;
+      // gadm fallback: 시도명으로 필터 (NAME_2 등 포함)
+      const pName=f.properties.NAME_1||f.properties.name||'';
+      return normName(pName)===ST.selectedSido;
+    });
     features=f;geoFit={type:'FeatureCollection',features:f};
   }else{features=ST.sidoGeo.features;geoFit=ST.sidoGeo;}
   if(!features.length)return;
@@ -573,7 +602,7 @@ function renderMap(){
       d3.select(this).attr('opacity',.7);
       const nm=isDrill?ST.selectedSido:normName(getGeoName(d.properties));
       ST.hoveredName=nm;
-      showTooltip(event,isDrill?d.properties.name:nm,nm,isDrill,W);
+      showTooltip(event,isDrill?getGeoName(d.properties):nm,nm,isDrill,W);
       if(!isDrill)showDetail(nm);
     })
     .on('mousemove',(event)=>moveTooltip(event,W))
@@ -582,15 +611,15 @@ function renderMap(){
       ST.hoveredName=null;hideTooltip();
       if(!ST.selectedSido)clearDetail();
     })
-    .on('click',(event,d)=>{if(!isDrill)drillDown(normName(d.properties.name));});
+    .on('click',(event,d)=>{if(!isDrill)drillDown(normName(getGeoName(d.properties)));});
 
   if(!isDrill){
     g.selectAll('text').data(ST.sidoGeo.features).join('text')
       .attr('transform',d=>{const c=path.centroid(d);return `translate(${c[0]},${c[1]})`;})
       .attr('text-anchor','middle').attr('dominant-baseline','middle')
-      .attr('font-size',d=>d.properties.name==='경기도'?'12':'10')
+      .attr('font-size',d=>normName(getGeoName(d.properties))==='경기도'?'12':'10')
       .attr('font-weight','700').attr('fill','rgba(255,255,255,.82)').attr('pointer-events','none')
-      .text(d=>shortSido(getGeoName(d.properties)));
+      .text(d=>shortSido(normName(getGeoName(d.properties))));
   }else{
     g.selectAll('text').data(features).join('text')
       .attr('transform',d=>{const c=path.centroid(d);return `translate(${c[0]},${c[1]})`;})
