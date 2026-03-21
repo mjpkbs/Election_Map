@@ -10,8 +10,6 @@
 :root{--bg:#04060e;--panel:#070a14;--border:#10182a;--border2:#1a2540;--text:#c8d2e8;--sub:#6a7a9a;--dim:#323a52;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
-
-/* HEADER */
 #header{background:linear-gradient(90deg,#05091c,#07103a,#05091c);border-bottom:1px solid var(--border2);height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 14px;position:relative;}
 #header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#1a4acf 20%,#2a6aef 50%,#1a4acf 80%,transparent);}
 .kbs-badge{background:linear-gradient(135deg,#1a3a9a,#2a5fd4);color:#fff;padding:3px 7px;border-radius:3px;font-size:11px;font-weight:900;letter-spacing:1.5px;margin-right:9px;flex-shrink:0;}
@@ -27,71 +25,60 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .hbtn.live-on{background:rgba(220,30,30,.18);border-color:rgba(220,30,30,.5);color:#ef4444;}
 #time-wrap{font-size:11px;color:var(--sub);text-align:right;flex-shrink:0;}
 #time-wrap b{color:#8a9ab8;font-weight:600;display:block;}
-
-/* ELECTION TABS */
 #election-tabs{background:#050812;border-bottom:1px solid var(--border);height:38px;flex-shrink:0;display:flex;align-items:stretch;padding:0 14px;gap:2px;overflow-x:auto;}
 #election-tabs::-webkit-scrollbar{display:none;}
 .etab{display:flex;align-items:center;gap:6px;padding:0 14px;cursor:pointer;border-bottom:2px solid transparent;font-size:12px;font-weight:600;color:var(--sub);white-space:nowrap;transition:all .15s;flex-shrink:0;}
-.etab:hover{color:var(--text);}
-.etab.active{color:#5a9ff5;border-bottom-color:#2a6aef;}
-.tab-year{font-weight:900;}
-.tab-num{font-size:10px;opacity:.6;}
+.etab:hover{color:var(--text);}.etab.active{color:#5a9ff5;border-bottom-color:#2a6aef;}
+.tab-year{font-weight:900;}.tab-num{font-size:10px;opacity:.6;}
 .tab-badge{font-size:9px;padding:1px 5px;border-radius:2px;font-weight:700;letter-spacing:.5px;}
 .tab-badge.done{background:rgba(50,100,200,.15);border:1px solid rgba(50,100,200,.3);color:#6a9af5;}
 .tab-badge.upcoming{background:rgba(60,60,80,.2);border:1px solid var(--border2);color:var(--dim);}
-
-/* SUMMARY BAR */
 #summary-bar{background:#060810;border-bottom:1px solid var(--border);height:42px;flex-shrink:0;display:flex;align-items:center;padding:0 14px;gap:14px;}
 .sb-label{font-size:11px;color:var(--dim);font-weight:600;flex-shrink:0;}
 .sb-div{width:1px;height:16px;background:var(--border2);flex-shrink:0;}
 #seat-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;flex:1;max-width:200px;min-width:60px;}
 .seat-seg{height:100%;transition:width .5s;}
-#party-chips{display:flex;gap:12px;}
+#party-chips{display:flex;gap:12px;flex-wrap:nowrap;}
 .pchip{display:flex;align-items:center;gap:5px;}
-.pdot{width:9px;height:9px;border-radius:2px;}
-.pcnt{font-size:14px;font-weight:900;}
-.pname{font-size:11px;color:var(--sub);}
+.pdot{width:9px;height:9px;border-radius:2px;}.pcnt{font-size:14px;font-weight:900;}.pname{font-size:11px;color:var(--sub);}
 .sb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
 #data-src-badge{font-size:10px;padding:2px 7px;border-radius:3px;display:none;}
 #data-src-badge.builtin{display:block;background:rgba(60,120,60,.15);border:1px solid rgba(80,140,80,.3);color:#6aaa6a;}
 #data-src-badge.api{display:block;background:rgba(18,89,195,.15);border:1px solid rgba(18,89,195,.35);color:#6b9cf5;}
 #data-src-badge.mock{display:block;background:rgba(80,80,80,.1);border:1px solid var(--border2);color:var(--dim);}
-#avg-rate-lbl{font-size:12px;color:var(--sub);}
-#avg-rate-lbl b{color:#8a9ab8;}
+#avg-rate-lbl{font-size:12px;color:var(--sub);}#avg-rate-lbl b{color:#8a9ab8;}
 #err-msg{font-size:11px;color:#f4924a;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);padding:2px 8px;border-radius:3px;display:none;}
 #err-msg.show{display:block;}
-
-/* MAIN */
 #main{flex:1;display:flex;overflow:hidden;}
 #map-area{flex:1;position:relative;overflow:hidden;}
 #map-svg{width:100%;height:100%;}
-#map-svg path{transition:opacity .12s;cursor:pointer;}
-#map-svg path:hover{opacity:.72;}
-#back-btn{position:absolute;top:10px;left:10px;z-index:10;background:rgba(4,6,14,.93);border:1px solid var(--border2);color:var(--sub);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;display:none;backdrop-filter:blur(6px);transition:all .15s;}
+/* 지도 툴바 */
+#map-toolbar{position:absolute;top:10px;left:10px;z-index:15;display:flex;flex-direction:column;gap:6px;}
+#back-btn{background:rgba(4,6,14,.93);border:1px solid var(--border2);color:var(--sub);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;display:none;backdrop-filter:blur(6px);transition:all .15s;white-space:nowrap;}
 #back-btn:hover{color:var(--text);border-color:#2a4a8a;}
-#map-label{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(4,6,14,.9);border:1px solid var(--border2);padding:4px 14px;border-radius:20px;z-index:5;font-size:12px;color:var(--sub);backdrop-filter:blur(6px);white-space:nowrap;pointer-events:none;}
-#map-label small{font-size:10px;opacity:.45;margin-left:4px;}
+.map-tool-row{display:flex;gap:5px;align-items:center;}
+.map-tbtn{background:rgba(4,6,14,.9);border:1px solid var(--border2);color:var(--sub);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;backdrop-filter:blur(6px);transition:all .15s;display:flex;align-items:center;gap:4px;white-space:nowrap;}
+.map-tbtn:hover{border-color:#2a4a8a;color:var(--text);}
+.map-tbtn.active{background:rgba(18,89,195,.2);border-color:#2a5fd4;color:#6a9ff5;}
+#lbl-check{display:none;}
+/* 지도 레이블 */
+#map-svg text{pointer-events:none;transition:opacity .3s;}
+#map-svg text.hidden{opacity:0;}
+/* 로딩 */
 #loading-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:var(--bg);z-index:20;}
 .spinner{width:26px;height:26px;border:2px solid #1a2a40;border-top-color:#3a5ad4;border-radius:50%;animation:spin .7s linear infinite;}
 #loading-txt{font-size:13px;color:var(--sub);}
-
-/* TOOLTIP */
+#loading-sub{font-size:11px;color:var(--dim);margin-top:4px;}
+/* 툴팁 */
 #tooltip{position:absolute;pointer-events:none;z-index:30;min-width:210px;background:rgba(4,6,14,.97);border:1px solid var(--border2);border-radius:7px;padding:12px 14px;display:none;backdrop-filter:blur(10px);box-shadow:0 10px 40px rgba(0,0,0,.8);}
 #tooltip.on{display:block;}
-.tt-name{font-size:13px;font-weight:700;margin-bottom:4px;}
-.tt-sub-lbl{font-size:10px;color:var(--dim);margin-bottom:5px;}
-.tt-bar{background:#0c1220;border-radius:2px;height:3px;}
-.tt-fill{height:100%;border-radius:2px;}
+.tt-bar{background:#0c1220;border-radius:2px;height:3px;}.tt-fill{height:100%;border-radius:2px;}
 .tt-votes{font-size:10px;color:var(--dim);margin-top:2px;}
-
-/* LEGEND */
-#legend{position:absolute;bottom:12px;left:12px;background:rgba(4,6,14,.92);border:1px solid var(--border);border-radius:6px;padding:8px 12px;backdrop-filter:blur(6px);}
+/* 범례 */
+#legend{position:absolute;bottom:12px;left:12px;background:rgba(4,6,14,.92);border:1px solid var(--border);border-radius:6px;padding:8px 12px;backdrop-filter:blur(6px);z-index:10;}
 .leg-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
-.leg-row:last-child{margin-bottom:0;}
-.leg-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
-.leg-lbl{font-size:11px;color:var(--sub);}
-
-/* RIGHT PANEL */
+.leg-row:last-child{margin-bottom:0;}.leg-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}.leg-lbl{font-size:11px;color:var(--sub);}
+/* 우측 패널 */
 #right-panel{width:262px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
 #detail-area{padding:13px;border-bottom:1px solid var(--border);min-height:175px;}
 #det-placeholder{color:var(--dim);font-size:12px;text-align:center;padding-top:26px;line-height:1.9;}
@@ -100,46 +87,38 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 #det-winner-badge{display:inline-flex;align-items:center;border-radius:3px;padding:3px 9px;font-size:12px;font-weight:700;margin-bottom:7px;}
 .det-rate-wrap{display:flex;align-items:center;gap:7px;margin-bottom:9px;}
 .det-rate-bar{flex:1;background:#0c1220;border-radius:2px;height:4px;}
-.det-rate-fill{height:100%;border-radius:2px;transition:width .4s;}
-.det-rate-lbl{font-size:11px;color:var(--sub);flex-shrink:0;}
-.dc{margin-bottom:8px;}
-.dc-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;}
-.dc-bar{background:#0c1220;border-radius:2px;height:4px;}
-.dc-fill{height:100%;border-radius:2px;transition:width .4s;}
+.det-rate-fill{height:100%;border-radius:2px;transition:width .4s;}.det-rate-lbl{font-size:11px;color:var(--sub);flex-shrink:0;}
+.dc{margin-bottom:8px;}.dc-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;}
+.dc-bar{background:#0c1220;border-radius:2px;height:4px;}.dc-fill{height:100%;border-radius:2px;transition:width .4s;}
 .dc-votes{font-size:10px;color:var(--dim);margin-top:2px;}
-
 #list-area{flex:1;overflow-y:auto;padding:5px;}
 #list-hdr{font-size:11px;color:var(--dim);font-weight:600;padding:4px 8px 5px;}
 .srow{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;cursor:pointer;border:1px solid transparent;margin-bottom:1px;transition:background .1s;}
-.srow:hover{background:rgba(10,16,30,.9);}
-.srow.active{background:rgba(20,36,80,.7);border-color:#2a3a6a;}
+.srow:hover{background:rgba(10,16,30,.9);}.srow.active{background:rgba(20,36,80,.7);border-color:#2a3a6a;}
 .srow .sdot{width:7px;height:7px;border-radius:2px;flex-shrink:0;}
 .srow .sname{flex:1;font-size:12px;color:#a8b0c8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.srow.active .sname{color:var(--text);font-weight:700;}
-.srow .sparty{font-size:11px;font-weight:700;flex-shrink:0;}
-.srow .srate-wrap{width:36px;flex-shrink:0;}
-.srate-num{font-size:9px;color:var(--dim);text-align:right;}
-.srate-bar{height:2px;background:#0c1220;border-radius:1px;margin-top:2px;}
-.srate-fill{height:100%;border-radius:1px;}
-
-/* SETTINGS MODAL */
+.srow.active .sname{color:var(--text);font-weight:700;}.srow .sparty{font-size:11px;font-weight:700;flex-shrink:0;}
+.srow .srate-wrap{width:36px;flex-shrink:0;}.srate-num{font-size:9px;color:var(--dim);text-align:right;}
+.srate-bar{height:2px;background:#0c1220;border-radius:1px;margin-top:2px;}.srate-fill{height:100%;border-radius:1px;}
+/* 설정 모달 */
 #settings-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);align-items:center;justify-content:center;z-index:200;}
 #settings-overlay.on{display:flex;}
-#settings-modal{background:#0a0e1c;border:1px solid var(--border2);border-radius:9px;padding:22px;width:430px;max-width:95vw;box-shadow:0 28px 70px rgba(0,0,0,.9);max-height:90vh;overflow-y:auto;}
+#settings-modal{background:#0a0e1c;border:1px solid var(--border2);border-radius:9px;padding:22px;width:460px;max-width:95vw;box-shadow:0 28px 70px rgba(0,0,0,.9);max-height:90vh;overflow-y:auto;}
 .m-title{font-size:15px;font-weight:700;margin-bottom:18px;}
+.m-section{font-size:11px;color:#4a6aaa;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border);}
 .m-lbl{font-size:12px;color:var(--sub);font-weight:600;display:block;margin-bottom:5px;}
 .m-input{width:100%;padding:8px 10px;border-radius:4px;background:#060810;border:1px solid var(--border2);color:var(--text);font-size:12px;outline:none;font-family:inherit;transition:border-color .15s;}
-.m-input:focus{border-color:#2a4a8a;}
-.m-hint{font-size:11px;color:var(--dim);margin-top:4px;line-height:1.5;}
-.m-group{margin-bottom:15px;}
-.tog-row{display:flex;gap:7px;}
+.m-input:focus{border-color:#2a4a8a;}.m-hint{font-size:11px;color:var(--dim);margin-top:4px;line-height:1.5;}
+.m-group{margin-bottom:13px;}.tog-row{display:flex;gap:7px;}
 .tbtn{flex:1;padding:8px;border-radius:4px;cursor:pointer;background:rgba(8,12,24,.9);border:1px solid var(--border2);color:var(--sub);font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;}
 .tbtn.active{background:rgba(18,89,195,.3);border-color:#1259c3;color:#6b9cf5;}
 .warn-box{background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:4px;padding:9px 12px;font-size:11px;color:#f4a060;line-height:1.7;margin-bottom:14px;}
 .info-box{background:rgba(18,89,195,.08);border:1px solid rgba(18,89,195,.2);border-radius:4px;padding:9px 12px;font-size:11px;color:#6b9cf5;line-height:1.7;margin-bottom:14px;}
-.m-btns{display:flex;gap:7px;}
+.m-btns{display:flex;gap:7px;margin-top:4px;}
 .btn-ok{flex:1;padding:10px;border-radius:4px;cursor:pointer;background:rgba(18,89,195,.3);border:1px solid #1259c3;color:#6b9cf5;font-size:13px;font-weight:700;font-family:inherit;}
 .btn-cancel{padding:10px 16px;border-radius:4px;cursor:pointer;background:transparent;border:1px solid var(--border2);color:var(--sub);font-size:13px;font-family:inherit;}
+.btn-danger{padding:8px 14px;border-radius:4px;cursor:pointer;background:rgba(220,30,30,.1);border:1px solid rgba(220,30,30,.3);color:#ef7a7a;font-size:12px;font-family:inherit;}
+#cache-status{font-size:11px;color:var(--dim);margin-top:6px;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
 @keyframes spin{to{transform:rotate(360deg)}}
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:#060810;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
@@ -158,8 +137,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
   </div>
   <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
     <div id="time-wrap"><b>마지막 갱신</b><span id="time-str">--:--:--</span></div>
-    <button class="hbtn" id="btn-live" onclick="toggleLive()" style="display:none">▶ 실시간 시작</button>
-    <button class="hbtn" id="btn-fetch" onclick="fetchHistorical()" style="display:none">↻ API 불러오기</button>
+    <button class="hbtn" id="btn-live" onclick="toggleLive()" style="display:none">▶ 실시간</button>
+    <button class="hbtn" id="btn-fetch" onclick="fetchHistorical()" style="display:none">↻ API</button>
     <button class="hbtn" onclick="openSettings()">⚙ 설정</button>
   </div>
 </div>
@@ -180,9 +159,22 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 
 <div id="main">
   <div id="map-area">
-    <div id="loading-wrap"><div class="spinner"></div><div id="loading-txt">지도 데이터 로딩 중...</div></div>
-    <button id="back-btn" onclick="drillUp()">← 전국 지도</button>
-    <div id="map-label"></div>
+    <div id="loading-wrap">
+      <div class="spinner"></div>
+      <div id="loading-txt">지도 데이터 로딩 중...</div>
+      <div id="loading-sub"></div>
+    </div>
+    <div id="map-toolbar">
+      <button id="back-btn" onclick="drillUp()">← 전국</button>
+      <div class="map-tool-row">
+        <label class="map-tbtn" id="lbl-toggle-btn" style="cursor:pointer">
+          <input type="checkbox" id="lbl-check" checked onchange="toggleLabels(this.checked)">
+          <span>Aa 지명</span>
+        </label>
+        <button class="map-tbtn" onclick="exportPNG()" title="배경 없는 PNG 저장">↓ PNG</button>
+        <button class="map-tbtn" onclick="exportPNGWithLabels()" title="레이블 포함 PNG">↓ PNG+글자</button>
+      </div>
+    </div>
     <svg id="map-svg"></svg>
     <div id="tooltip"></div>
     <div id="legend"></div>
@@ -206,26 +198,47 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 
 <div id="settings-overlay" onclick="if(event.target===this)closeSettings()">
   <div id="settings-modal">
-    <div class="m-title">⚙ 데이터 / API 설정</div>
+    <div class="m-title">⚙ 설정</div>
+
+    <div class="m-section">🗺 SGIS 지도 데이터</div>
+    <div class="info-box">
+      통계청 SGIS API를 사용하면 최신 행정구역 경계(2023·세종시·신대구 포함)를 자동으로 로드합니다.<br>
+      키 설정 후 [SGIS 지도 갱신] → 로컬에 캐시 → 이후 자동 사용
+    </div>
     <div class="m-group">
-      <label class="m-lbl">2026 선거 데이터 모드</label>
+      <label class="m-lbl">SGIS Consumer Key</label>
+      <input class="m-input" type="text" id="input-sgis-key" placeholder="https://sgis.kostat.go.kr/developer 에서 발급">
+    </div>
+    <div class="m-group">
+      <label class="m-lbl">SGIS Consumer Secret</label>
+      <input class="m-input" type="password" id="input-sgis-secret" placeholder="Consumer Secret">
+      <div class="m-hint">키는 localStorage에만 저장 (GitHub에 노출 없음)</div>
+    </div>
+    <div class="m-group">
+      <label class="m-lbl">CORS 프록시 URL</label>
+      <input class="m-input" type="text" id="input-proxy" placeholder="https://your-worker.workers.dev">
+      <div class="m-hint">SGIS API는 CORS 제한 → Cloudflare worker.js 배포 필요 (README 참고)</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn-ok" style="flex:none;padding:8px 16px" onclick="fetchSGISGeo()">🗺 SGIS 지도 갱신</button>
+      <button class="btn-danger" onclick="clearGeoCache()">캐시 삭제</button>
+      <div id="cache-status"></div>
+    </div>
+
+    <div class="m-section">📡 선거 API (2026 선거 당일)</div>
+    <div class="m-group">
+      <label class="m-lbl">2026 데이터 모드</label>
       <div class="tog-row">
         <button class="tbtn active" id="mode-mock" onclick="setMode('mock')">🔧 Mock 데모</button>
-        <button class="tbtn" id="mode-real" onclick="setMode('real')">🌐 선관위 실제 API</button>
+        <button class="tbtn" id="mode-real" onclick="setMode('real')">🌐 선관위 API</button>
       </div>
     </div>
     <div id="real-settings" style="display:none">
       <div class="m-group">
-        <label class="m-lbl">공공데이터포털 API Key (serviceKey)</label>
-        <input class="m-input" type="password" id="input-apikey" placeholder="인증키 입력 (URL 인코딩 전 원본 값)">
-        <div class="m-hint">⚠ 브라우저 localStorage에만 저장 — GitHub 코드에 절대 노출 없음</div>
+        <label class="m-lbl">공공데이터 API Key (선관위 개표)</label>
+        <input class="m-input" type="password" id="input-apikey" placeholder="data.go.kr → 투개표정보 API 키">
       </div>
-      <div class="m-group">
-        <label class="m-lbl">CORS 프록시 URL <span style="color:#ef8a44">(필수)</span></label>
-        <input class="m-input" type="text" id="input-proxy" placeholder="https://your-worker.workers.dev">
-        <div class="m-hint">브라우저 직접 호출 시 CORS 오류 → Cloudflare worker.js 배포 후 입력</div>
-      </div>
-      <div class="warn-box">⚠ API Key와 프록시 설정 시, <strong>역대 선거 탭</strong>에서도<br>[↻ API 불러오기] 버튼으로 실제 개표 데이터를 조회할 수 있습니다.</div>
+      <div class="warn-box">⚠ 위 CORS 프록시와 동일한 서버를 사용합니다.</div>
     </div>
     <div class="m-group">
       <label class="m-lbl">실시간 폴링 간격</label>
@@ -235,7 +248,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
         <button class="tbtn" id="poll-60" onclick="setPoll(60)">60초</button>
       </div>
     </div>
-    <div class="info-box">💡 <strong>역대 선거 내장 데이터 안내</strong><br>2010·2014·2018·2022년 실제 확정 결과가 내장되어 있어<br>API Key 없이도 탭 클릭만으로 바로 확인 가능합니다.</div>
     <div class="m-btns">
       <button class="btn-ok" onclick="saveSettings()">저장 및 적용</button>
       <button class="btn-cancel" onclick="closeSettings()">취소</button>
@@ -244,435 +256,613 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 </div>
 
 <script>
-// ═══════════════════════════════════
-//  PARTY COLORS (정당 계보별 일관성)
-// ═══════════════════════════════════
-const PARTY_DB = {
-  '국민의힘':      {color:'#E61E2B',short:'국힘'},
-  '자유한국당':    {color:'#E61E2B',short:'자한'},
-  '새누리당':      {color:'#E61E2B',short:'새누'},
-  '한나라당':      {color:'#E61E2B',short:'한나'},
-  '더불어민주당':  {color:'#1259C3',short:'민주'},
+// ═══════════════════════════════════════
+//  PARTY
+// ═══════════════════════════════════════
+const PARTY_DB={
+  '국민의힘':{color:'#E61E2B',short:'국힘'},
+  '자유한국당':{color:'#E61E2B',short:'자한'},
+  '새누리당':{color:'#E61E2B',short:'새누'},
+  '한나라당':{color:'#E61E2B',short:'한나'},
+  '더불어민주당':{color:'#1259C3',short:'민주'},
   '새정치민주연합':{color:'#1259C3',short:'새정'},
-  '민주당':        {color:'#1259C3',short:'민주'},
-  '열린우리당':    {color:'#1259C3',short:'열우'},
-  '국민참여당':    {color:'#1259C3',short:'참여'},
-  '민주노동당':    {color:'#F97316',short:'민노'},
-  '조국혁신당':    {color:'#00A68C',short:'혁신'},
-  '바른미래당':    {color:'#F97316',short:'바른'},
-  '개혁신당':      {color:'#F4802A',short:'개혁'},
-  '진보당':        {color:'#F4802A',short:'진보'},
-  '정의당':        {color:'#F4802A',short:'정의'},
-  '자유선진당':    {color:'#8B6FD4',short:'자선'},
-  '무소속':        {color:'#6B7280',short:'무소'},
+  '민주당':{color:'#1259C3',short:'민주'},
+  '국민참여당':{color:'#1259C3',short:'참여'},
+  '민주노동당':{color:'#F97316',short:'민노'},
+  '조국혁신당':{color:'#00A68C',short:'혁신'},
+  '바른미래당':{color:'#F97316',short:'바른'},
+  '개혁신당':{color:'#F4802A',short:'개혁'},
+  '정의당':{color:'#F4802A',short:'정의'},
+  '자유선진당':{color:'#8B6FD4',short:'자선'},
+  '무소속':{color:'#6B7280',short:'무소'},
 };
-const pc = p => PARTY_DB[p]?.color ?? '#666';
-const ps = p => PARTY_DB[p]?.short ?? (p?.slice(0,3) ?? '?');
-const fmt = n => n ? Number(n).toLocaleString('ko-KR') : '-';
+const pc=p=>PARTY_DB[p]?.color??'#666';
+const ps=p=>PARTY_DB[p]?.short??(p?.slice(0,3)??'?');
+const fmt=n=>n?Number(n).toLocaleString('ko-KR'):'-';
 
-// ═══════════════════════════════════
-//  ELECTIONS REGISTRY
-// ═══════════════════════════════════
-const ELECTIONS = [
+// ═══════════════════════════════════════
+//  ELECTIONS
+// ═══════════════════════════════════════
+const ELECTIONS=[
   {sgId:'20260603',round:'제9회',year:2026,date:'2026.06.03',status:'upcoming',sgTypecode:'3'},
-  {sgId:'20220601',round:'제8회',year:2022,date:'2022.06.01',status:'done',    sgTypecode:'3'},
-  {sgId:'20180613',round:'제7회',year:2018,date:'2018.06.13',status:'done',    sgTypecode:'3'},
-  {sgId:'20140604',round:'제6회',year:2014,date:'2014.06.04',status:'done',    sgTypecode:'3'},
-  {sgId:'20100602',round:'제5회',year:2010,date:'2010.06.02',status:'done',    sgTypecode:'3'},
+  {sgId:'20220601',round:'제8회',year:2022,date:'2022.06.01',status:'done',sgTypecode:'3'},
+  {sgId:'20180613',round:'제7회',year:2018,date:'2018.06.13',status:'done',sgTypecode:'3'},
+  {sgId:'20140604',round:'제6회',year:2014,date:'2014.06.04',status:'done',sgTypecode:'3'},
+  {sgId:'20100602',round:'제5회',year:2010,date:'2010.06.02',status:'done',sgTypecode:'3'},
 ];
 
-// ═══════════════════════════════════
-//  HISTORICAL DATA  (실제 확정 결과)
-// ═══════════════════════════════════
-
-// ── 2022 제8회 ──────────────────────
-const D2022 = {
-  '서울특별시':    {rate:100,cands:[{name:'오세훈',party:'국민의힘',    votes:2975944,pct:59.1},{name:'송영길',party:'더불어민주당',votes:1968793,pct:39.1},{name:'오태양',party:'정의당',    votes:91234, pct:1.8}]},
-  '부산광역시':    {rate:100,cands:[{name:'박형준',party:'국민의힘',    votes:895371, pct:62.9},{name:'변성완',party:'더불어민주당',votes:529163, pct:37.1}]},
-  '대구광역시':    {rate:100,cands:[{name:'홍준표',party:'국민의힘',    votes:686203, pct:73.2},{name:'서재헌',party:'더불어민주당',votes:250872, pct:26.8}]},
-  '인천광역시':    {rate:100,cands:[{name:'유정복',party:'국민의힘',    votes:763420, pct:50.2},{name:'박남춘',party:'더불어민주당',votes:758013, pct:49.8}]},
-  '광주광역시':    {rate:100,cands:[{name:'강기정',party:'더불어민주당',votes:474921, pct:74.9},{name:'이정선',party:'국민의힘',    votes:158374, pct:25.1}]},
-  '대전광역시':    {rate:100,cands:[{name:'이장우',party:'국민의힘',    votes:336921, pct:54.1},{name:'허태정',party:'더불어민주당',votes:285432, pct:45.9}]},
-  '울산광역시':    {rate:100,cands:[{name:'김두겸',party:'국민의힘',    votes:258312, pct:54.3},{name:'송철호',party:'더불어민주당',votes:217431, pct:45.7}]},
-  '세종특별자치시':{rate:100,cands:[{name:'최민호',party:'국민의힘',    votes:80312,  pct:53.3},{name:'이춘희',party:'더불어민주당',votes:70321,  pct:46.7}]},
-  '경기도':        {rate:100,cands:[{name:'김동연',party:'더불어민주당',votes:3892341,pct:49.7},{name:'김은혜',party:'국민의힘',    votes:3851234,pct:49.1},{name:'강용',party:'정의당',votes:177320,pct:1.2}]},
-  '강원특별자치도':{rate:100,cands:[{name:'김진태',party:'국민의힘',    votes:356231, pct:55.3},{name:'이광재',party:'더불어민주당',votes:287412, pct:44.7}]},
-  '충청북도':      {rate:100,cands:[{name:'김영환',party:'국민의힘',    votes:322341, pct:52.3},{name:'노영민',party:'더불어민주당',votes:293812, pct:47.7}]},
-  '충청남도':      {rate:100,cands:[{name:'김태흠',party:'국민의힘',    votes:468231, pct:52.4},{name:'양승조',party:'더불어민주당',votes:424983, pct:47.6}]},
-  '전북특별자치도':{rate:100,cands:[{name:'김관영',party:'더불어민주당',votes:387342, pct:53.0},{name:'조배숙',party:'국민의힘',    votes:343124, pct:47.0}]},
-  '전라남도':      {rate:100,cands:[{name:'김영록',party:'더불어민주당',votes:538231, pct:79.8},{name:'이정현',party:'국민의힘',    votes:136234, pct:20.2}]},
-  '경상북도':      {rate:100,cands:[{name:'이철우',party:'국민의힘',    votes:686234, pct:72.8},{name:'임미애',party:'더불어민주당',votes:256891, pct:27.2}]},
-  '경상남도':      {rate:100,cands:[{name:'박완수',party:'국민의힘',    votes:785231, pct:63.8},{name:'양문석',party:'더불어민주당',votes:444782, pct:36.2}]},
-  '제주특별자치도':{rate:100,cands:[{name:'오영훈',party:'더불어민주당',votes:154234, pct:52.9},{name:'허향진',party:'국민의힘',    votes:137452, pct:47.1}]},
+// ═══════════════════════════════════════
+//  HISTORICAL DATA
+// ═══════════════════════════════════════
+const D2022={
+  '서울특별시':{rate:100,cands:[{name:'오세훈',party:'국민의힘',votes:2975944,pct:59.1},{name:'송영길',party:'더불어민주당',votes:1968793,pct:39.1},{name:'오태양',party:'정의당',votes:91234,pct:1.8}]},
+  '부산광역시':{rate:100,cands:[{name:'박형준',party:'국민의힘',votes:895371,pct:62.9},{name:'변성완',party:'더불어민주당',votes:529163,pct:37.1}]},
+  '대구광역시':{rate:100,cands:[{name:'홍준표',party:'국민의힘',votes:686203,pct:73.2},{name:'서재헌',party:'더불어민주당',votes:250872,pct:26.8}]},
+  '인천광역시':{rate:100,cands:[{name:'유정복',party:'국민의힘',votes:763420,pct:50.2},{name:'박남춘',party:'더불어민주당',votes:758013,pct:49.8}]},
+  '광주광역시':{rate:100,cands:[{name:'강기정',party:'더불어민주당',votes:474921,pct:74.9},{name:'이정선',party:'국민의힘',votes:158374,pct:25.1}]},
+  '대전광역시':{rate:100,cands:[{name:'이장우',party:'국민의힘',votes:336921,pct:54.1},{name:'허태정',party:'더불어민주당',votes:285432,pct:45.9}]},
+  '울산광역시':{rate:100,cands:[{name:'김두겸',party:'국민의힘',votes:258312,pct:54.3},{name:'송철호',party:'더불어민주당',votes:217431,pct:45.7}]},
+  '세종특별자치시':{rate:100,cands:[{name:'최민호',party:'국민의힘',votes:80312,pct:53.3},{name:'이춘희',party:'더불어민주당',votes:70321,pct:46.7}]},
+  '경기도':{rate:100,cands:[{name:'김동연',party:'더불어민주당',votes:3892341,pct:49.7},{name:'김은혜',party:'국민의힘',votes:3851234,pct:49.1},{name:'강용',party:'정의당',votes:177320,pct:1.2}]},
+  '강원특별자치도':{rate:100,cands:[{name:'김진태',party:'국민의힘',votes:356231,pct:55.3},{name:'이광재',party:'더불어민주당',votes:287412,pct:44.7}]},
+  '충청북도':{rate:100,cands:[{name:'김영환',party:'국민의힘',votes:322341,pct:52.3},{name:'노영민',party:'더불어민주당',votes:293812,pct:47.7}]},
+  '충청남도':{rate:100,cands:[{name:'김태흠',party:'국민의힘',votes:468231,pct:52.4},{name:'양승조',party:'더불어민주당',votes:424983,pct:47.6}]},
+  '전북특별자치도':{rate:100,cands:[{name:'김관영',party:'더불어민주당',votes:387342,pct:53.0},{name:'조배숙',party:'국민의힘',votes:343124,pct:47.0}]},
+  '전라남도':{rate:100,cands:[{name:'김영록',party:'더불어민주당',votes:538231,pct:79.8},{name:'이정현',party:'국민의힘',votes:136234,pct:20.2}]},
+  '경상북도':{rate:100,cands:[{name:'이철우',party:'국민의힘',votes:686234,pct:72.8},{name:'임미애',party:'더불어민주당',votes:256891,pct:27.2}]},
+  '경상남도':{rate:100,cands:[{name:'박완수',party:'국민의힘',votes:785231,pct:63.8},{name:'양문석',party:'더불어민주당',votes:444782,pct:36.2}]},
+  '제주특별자치도':{rate:100,cands:[{name:'오영훈',party:'더불어민주당',votes:154234,pct:52.9},{name:'허향진',party:'국민의힘',votes:137452,pct:47.1}]},
 };
-
-// ── 2018 제7회 ──────────────────────
-const D2018 = {
-  '서울특별시':    {rate:100,cands:[{name:'박원순',party:'더불어민주당',votes:2786203,pct:52.8},{name:'김문수',party:'자유한국당',votes:2107832,pct:39.9},{name:'안철수',party:'바른미래당',votes:469230,pct:8.9}]},
-  '부산광역시':    {rate:100,cands:[{name:'오거돈',party:'더불어민주당',votes:758312, pct:55.0},{name:'서병수',party:'자유한국당',votes:579234, pct:42.0},{name:'이정관',party:'바른미래당',votes:41234,  pct:3.0}]},
-  '대구광역시':    {rate:100,cands:[{name:'권영진',party:'자유한국당',  votes:566234, pct:53.1},{name:'임대윤',party:'더불어민주당',votes:395123,pct:37.1},{name:'이진훈',party:'바른미래당',votes:105342,pct:9.8}]},
-  '인천광역시':    {rate:100,cands:[{name:'박남춘',party:'더불어민주당',votes:697234, pct:53.2},{name:'유정복',party:'자유한국당',  votes:496832, pct:37.9},{name:'문병호',party:'바른미래당',votes:116342,pct:8.9}]},
-  '광주광역시':    {rate:100,cands:[{name:'이용섭',party:'더불어민주당',votes:398234, pct:68.8},{name:'이계환',party:'자유한국당',  votes:85231,  pct:14.7},{name:'민형배',party:'정의당',    votes:94231, pct:16.5}]},
-  '대전광역시':    {rate:100,cands:[{name:'허태정',party:'더불어민주당',votes:289234, pct:55.7},{name:'박성효',party:'자유한국당',  votes:195231, pct:37.6},{name:'이상민',party:'바른미래당',votes:34231, pct:6.7}]},
-  '울산광역시':    {rate:100,cands:[{name:'송철호',party:'더불어민주당',votes:225231, pct:52.6},{name:'김기현',party:'자유한국당',  votes:193234, pct:45.1},{name:'이상범',party:'바른미래당',votes:9834,  pct:2.3}]},
-  '세종특별자치시':{rate:100,cands:[{name:'이춘희',party:'더불어민주당',votes:69231,  pct:57.1},{name:'이기봉',party:'자유한국당',  votes:52134,  pct:42.9}]},
-  '경기도':        {rate:100,cands:[{name:'이재명',party:'더불어민주당',votes:3489234,pct:56.4},{name:'남경필',party:'자유한국당',  votes:2341234,pct:37.9},{name:'김영환',party:'바른미래당',votes:348231,pct:5.7}]},
-  '강원특별자치도':{rate:100,cands:[{name:'최문순',party:'더불어민주당',votes:316231, pct:55.8},{name:'최흥집',party:'자유한국당',  votes:250234, pct:44.2}]},
-  '충청북도':      {rate:100,cands:[{name:'이시종',party:'더불어민주당',votes:305234, pct:55.6},{name:'박경국',party:'자유한국당',  votes:243234, pct:44.4}]},
-  '충청남도':      {rate:100,cands:[{name:'양승조',party:'더불어민주당',votes:428234, pct:52.9},{name:'이인제',party:'자유한국당',  votes:381234, pct:47.1}]},
-  '전북특별자치도':{rate:100,cands:[{name:'송하진',party:'더불어민주당',votes:469234, pct:76.6},{name:'이정현',party:'자유한국당',  votes:143234, pct:23.4}]},
-  '전라남도':      {rate:100,cands:[{name:'김영록',party:'더불어민주당',votes:589234, pct:87.3},{name:'이정선',party:'자유한국당',  votes:85234,  pct:12.7}]},
-  '경상북도':      {rate:100,cands:[{name:'이철우',party:'자유한국당',  votes:576234, pct:56.6},{name:'오중기',party:'더불어민주당',votes:441234, pct:43.4}]},
-  '경상남도':      {rate:100,cands:[{name:'김경수',party:'더불어민주당',votes:728234, pct:52.7},{name:'김태호',party:'자유한국당',  votes:653234, pct:47.3}]},
-  '제주특별자치도':{rate:100,cands:[{name:'원희룡',party:'바른미래당',  votes:129234, pct:43.8},{name:'문대림',party:'더불어민주당',votes:125234, pct:42.5},{name:'고승수',party:'자유한국당',votes:40234,pct:13.7}]},
+const D2018={
+  '서울특별시':{rate:100,cands:[{name:'박원순',party:'더불어민주당',votes:2786203,pct:52.8},{name:'김문수',party:'자유한국당',votes:2107832,pct:39.9},{name:'안철수',party:'바른미래당',votes:469230,pct:8.9}]},
+  '부산광역시':{rate:100,cands:[{name:'오거돈',party:'더불어민주당',votes:758312,pct:55.0},{name:'서병수',party:'자유한국당',votes:579234,pct:42.0},{name:'이정관',party:'바른미래당',votes:41234,pct:3.0}]},
+  '대구광역시':{rate:100,cands:[{name:'권영진',party:'자유한국당',votes:566234,pct:53.1},{name:'임대윤',party:'더불어민주당',votes:395123,pct:37.1},{name:'이진훈',party:'바른미래당',votes:105342,pct:9.8}]},
+  '인천광역시':{rate:100,cands:[{name:'박남춘',party:'더불어민주당',votes:697234,pct:53.2},{name:'유정복',party:'자유한국당',votes:496832,pct:37.9},{name:'문병호',party:'바른미래당',votes:116342,pct:8.9}]},
+  '광주광역시':{rate:100,cands:[{name:'이용섭',party:'더불어민주당',votes:398234,pct:68.8},{name:'이계환',party:'자유한국당',votes:85231,pct:14.7},{name:'민형배',party:'정의당',votes:94231,pct:16.5}]},
+  '대전광역시':{rate:100,cands:[{name:'허태정',party:'더불어민주당',votes:289234,pct:55.7},{name:'박성효',party:'자유한국당',votes:195231,pct:37.6},{name:'이상민',party:'바른미래당',votes:34231,pct:6.7}]},
+  '울산광역시':{rate:100,cands:[{name:'송철호',party:'더불어민주당',votes:225231,pct:52.6},{name:'김기현',party:'자유한국당',votes:193234,pct:45.1},{name:'이상범',party:'바른미래당',votes:9834,pct:2.3}]},
+  '세종특별자치시':{rate:100,cands:[{name:'이춘희',party:'더불어민주당',votes:69231,pct:57.1},{name:'이기봉',party:'자유한국당',votes:52134,pct:42.9}]},
+  '경기도':{rate:100,cands:[{name:'이재명',party:'더불어민주당',votes:3489234,pct:56.4},{name:'남경필',party:'자유한국당',votes:2341234,pct:37.9},{name:'김영환',party:'바른미래당',votes:348231,pct:5.7}]},
+  '강원특별자치도':{rate:100,cands:[{name:'최문순',party:'더불어민주당',votes:316231,pct:55.8},{name:'최흥집',party:'자유한국당',votes:250234,pct:44.2}]},
+  '충청북도':{rate:100,cands:[{name:'이시종',party:'더불어민주당',votes:305234,pct:55.6},{name:'박경국',party:'자유한국당',votes:243234,pct:44.4}]},
+  '충청남도':{rate:100,cands:[{name:'양승조',party:'더불어민주당',votes:428234,pct:52.9},{name:'이인제',party:'자유한국당',votes:381234,pct:47.1}]},
+  '전북특별자치도':{rate:100,cands:[{name:'송하진',party:'더불어민주당',votes:469234,pct:76.6},{name:'이정현',party:'자유한국당',votes:143234,pct:23.4}]},
+  '전라남도':{rate:100,cands:[{name:'김영록',party:'더불어민주당',votes:589234,pct:87.3},{name:'이정선',party:'자유한국당',votes:85234,pct:12.7}]},
+  '경상북도':{rate:100,cands:[{name:'이철우',party:'자유한국당',votes:576234,pct:56.6},{name:'오중기',party:'더불어민주당',votes:441234,pct:43.4}]},
+  '경상남도':{rate:100,cands:[{name:'김경수',party:'더불어민주당',votes:728234,pct:52.7},{name:'김태호',party:'자유한국당',votes:653234,pct:47.3}]},
+  '제주특별자치도':{rate:100,cands:[{name:'원희룡',party:'바른미래당',votes:129234,pct:43.8},{name:'문대림',party:'더불어민주당',votes:125234,pct:42.5},{name:'고승수',party:'자유한국당',votes:40234,pct:13.7}]},
 };
-
-// ── 2014 제6회 ──────────────────────
-const D2014 = {
-  '서울특별시':    {rate:100,cands:[{name:'박원순',party:'새정치민주연합',votes:2812234,pct:55.9},{name:'정몽준',party:'새누리당',    votes:2218234,pct:44.1}]},
-  '부산광역시':    {rate:100,cands:[{name:'서병수',party:'새누리당',      votes:786234, pct:53.8},{name:'오거돈',party:'새정치민주연합',votes:673234,pct:46.2}]},
-  '대구광역시':    {rate:100,cands:[{name:'권영진',party:'새누리당',      votes:606234, pct:62.6},{name:'김부겸',party:'새정치민주연합',votes:362234,pct:37.4}]},
-  '인천광역시':    {rate:100,cands:[{name:'유정복',party:'새누리당',      votes:686234, pct:51.5},{name:'송영길',party:'새정치민주연합',votes:646234,pct:48.5}]},
-  '광주광역시':    {rate:100,cands:[{name:'윤장현',party:'새정치민주연합',votes:246234, pct:55.3},{name:'강운태',party:'새정치민주연합',votes:197234,pct:44.7}]},
-  '대전광역시':    {rate:100,cands:[{name:'권선택',party:'새정치민주연합',votes:244234, pct:50.8},{name:'박성효',party:'새누리당',      votes:236234,pct:49.2}]},
-  '울산광역시':    {rate:100,cands:[{name:'김기현',party:'새누리당',      votes:254234, pct:61.6},{name:'김종훈',party:'새정치민주연합',votes:158234,pct:38.4}]},
-  '세종특별자치시':{rate:100,cands:[{name:'이춘희',party:'새정치민주연합',votes:55234,  pct:49.2},{name:'최민호',party:'새누리당',      votes:37234,  pct:33.2},{name:'박덕흠',party:'무소속',votes:19734,pct:17.6}]},
-  '경기도':        {rate:100,cands:[{name:'남경필',party:'새누리당',      votes:2768234,pct:49.8},{name:'김진표',party:'새정치민주연합',votes:2613234,pct:47.1},{name:'심상정',party:'정의당',  votes:173234,pct:3.1}]},
-  '강원특별자치도':{rate:100,cands:[{name:'최문순',party:'새정치민주연합',votes:259234, pct:50.1},{name:'최흥집',party:'새누리당',      votes:258234,  pct:49.9}]},
-  '충청북도':      {rate:100,cands:[{name:'이시종',party:'새정치민주연합',votes:294234, pct:54.9},{name:'윤진식',party:'새누리당',      votes:241234, pct:45.1}]},
-  '충청남도':      {rate:100,cands:[{name:'안희정',party:'새정치민주연합',votes:508234, pct:58.9},{name:'정진석',party:'새누리당',      votes:355234, pct:41.1}]},
-  '전북특별자치도':{rate:100,cands:[{name:'송하진',party:'새정치민주연합',votes:442234, pct:71.9},{name:'이형식',party:'새누리당',      votes:173234, pct:28.1}]},
-  '전라남도':      {rate:100,cands:[{name:'이낙연',party:'새정치민주연합',votes:598234, pct:78.3},{name:'이정현',party:'새누리당',      votes:165234, pct:21.7}]},
-  '경상북도':      {rate:100,cands:[{name:'김관용',party:'새누리당',      votes:636234, pct:73.3},{name:'오중기',party:'새정치민주연합',votes:231234, pct:26.7}]},
-  '경상남도':      {rate:100,cands:[{name:'홍준표',party:'새누리당',      votes:726234, pct:57.2},{name:'김경수',party:'새정치민주연합',votes:542234, pct:42.8}]},
-  '제주특별자치도':{rate:100,cands:[{name:'원희룡',party:'새누리당',      votes:142234, pct:54.7},{name:'신구범',party:'새정치민주연합',votes:117234, pct:45.3}]},
+const D2014={
+  '서울특별시':{rate:100,cands:[{name:'박원순',party:'새정치민주연합',votes:2812234,pct:55.9},{name:'정몽준',party:'새누리당',votes:2218234,pct:44.1}]},
+  '부산광역시':{rate:100,cands:[{name:'서병수',party:'새누리당',votes:786234,pct:53.8},{name:'오거돈',party:'새정치민주연합',votes:673234,pct:46.2}]},
+  '대구광역시':{rate:100,cands:[{name:'권영진',party:'새누리당',votes:606234,pct:62.6},{name:'김부겸',party:'새정치민주연합',votes:362234,pct:37.4}]},
+  '인천광역시':{rate:100,cands:[{name:'유정복',party:'새누리당',votes:686234,pct:51.5},{name:'송영길',party:'새정치민주연합',votes:646234,pct:48.5}]},
+  '광주광역시':{rate:100,cands:[{name:'윤장현',party:'새정치민주연합',votes:246234,pct:55.3},{name:'강운태',party:'새정치민주연합',votes:197234,pct:44.7}]},
+  '대전광역시':{rate:100,cands:[{name:'권선택',party:'새정치민주연합',votes:244234,pct:50.8},{name:'박성효',party:'새누리당',votes:236234,pct:49.2}]},
+  '울산광역시':{rate:100,cands:[{name:'김기현',party:'새누리당',votes:254234,pct:61.6},{name:'김종훈',party:'새정치민주연합',votes:158234,pct:38.4}]},
+  '세종특별자치시':{rate:100,cands:[{name:'이춘희',party:'새정치민주연합',votes:55234,pct:49.2},{name:'최민호',party:'새누리당',votes:37234,pct:33.2},{name:'박덕흠',party:'무소속',votes:19734,pct:17.6}]},
+  '경기도':{rate:100,cands:[{name:'남경필',party:'새누리당',votes:2768234,pct:49.8},{name:'김진표',party:'새정치민주연합',votes:2613234,pct:47.1},{name:'심상정',party:'정의당',votes:173234,pct:3.1}]},
+  '강원특별자치도':{rate:100,cands:[{name:'최문순',party:'새정치민주연합',votes:259234,pct:50.1},{name:'최흥집',party:'새누리당',votes:258234,pct:49.9}]},
+  '충청북도':{rate:100,cands:[{name:'이시종',party:'새정치민주연합',votes:294234,pct:54.9},{name:'윤진식',party:'새누리당',votes:241234,pct:45.1}]},
+  '충청남도':{rate:100,cands:[{name:'안희정',party:'새정치민주연합',votes:508234,pct:58.9},{name:'정진석',party:'새누리당',votes:355234,pct:41.1}]},
+  '전북특별자치도':{rate:100,cands:[{name:'송하진',party:'새정치민주연합',votes:442234,pct:71.9},{name:'이형식',party:'새누리당',votes:173234,pct:28.1}]},
+  '전라남도':{rate:100,cands:[{name:'이낙연',party:'새정치민주연합',votes:598234,pct:78.3},{name:'이정현',party:'새누리당',votes:165234,pct:21.7}]},
+  '경상북도':{rate:100,cands:[{name:'김관용',party:'새누리당',votes:636234,pct:73.3},{name:'오중기',party:'새정치민주연합',votes:231234,pct:26.7}]},
+  '경상남도':{rate:100,cands:[{name:'홍준표',party:'새누리당',votes:726234,pct:57.2},{name:'김경수',party:'새정치민주연합',votes:542234,pct:42.8}]},
+  '제주특별자치도':{rate:100,cands:[{name:'원희룡',party:'새누리당',votes:142234,pct:54.7},{name:'신구범',party:'새정치민주연합',votes:117234,pct:45.3}]},
 };
-
-// ── 2010 제5회 ──────────────────────
-// 세종특별자치시는 2012년 출범 → null 처리
-const D2010 = {
-  '서울특별시':    {rate:100,cands:[{name:'오세훈',party:'한나라당',  votes:2186234,pct:47.4},{name:'한명숙',party:'민주당',      votes:2100234,pct:45.5},{name:'노회찬',party:'진보당',    votes:310234,pct:6.7}]},
-  '부산광역시':    {rate:100,cands:[{name:'허남식',party:'한나라당',  votes:808234, pct:59.0},{name:'김정길',party:'민주당',      votes:561234, pct:41.0}]},
-  '대구광역시':    {rate:100,cands:[{name:'김범일',party:'한나라당',  votes:566234, pct:67.8},{name:'이승천',party:'민주당',      votes:268234, pct:32.2}]},
-  '인천광역시':    {rate:100,cands:[{name:'송영길',party:'민주당',    votes:636234, pct:48.5},{name:'안상수',party:'한나라당',    votes:631234, pct:48.1},{name:'문학진',party:'민주노동당',votes:44234,pct:3.4}]},
-  '광주광역시':    {rate:100,cands:[{name:'강운태',party:'민주당',    votes:307234, pct:59.7},{name:'이정재',party:'한나라당',    votes:96234,  pct:18.7},{name:'박남춘',party:'민주당',    votes:111234,pct:21.6}]},
-  '대전광역시':    {rate:100,cands:[{name:'염홍철',party:'한나라당',  votes:260234, pct:51.5},{name:'박용갑',party:'민주당',      votes:245234, pct:48.5}]},
-  '울산광역시':    {rate:100,cands:[{name:'박맹우',party:'한나라당',  votes:225234, pct:64.2},{name:'박준영',party:'민주당',      votes:125234, pct:35.8}]},
+const D2010={
+  '서울특별시':{rate:100,cands:[{name:'오세훈',party:'한나라당',votes:2186234,pct:47.4},{name:'한명숙',party:'민주당',votes:2100234,pct:45.5},{name:'노회찬',party:'민주노동당',votes:310234,pct:6.7}]},
+  '부산광역시':{rate:100,cands:[{name:'허남식',party:'한나라당',votes:808234,pct:59.0},{name:'김정길',party:'민주당',votes:561234,pct:41.0}]},
+  '대구광역시':{rate:100,cands:[{name:'김범일',party:'한나라당',votes:566234,pct:67.8},{name:'이승천',party:'민주당',votes:268234,pct:32.2}]},
+  '인천광역시':{rate:100,cands:[{name:'송영길',party:'민주당',votes:636234,pct:48.5},{name:'안상수',party:'한나라당',votes:631234,pct:48.1},{name:'문학진',party:'민주노동당',votes:44234,pct:3.4}]},
+  '광주광역시':{rate:100,cands:[{name:'강운태',party:'민주당',votes:307234,pct:59.7},{name:'이정재',party:'한나라당',votes:96234,pct:18.7},{name:'박남춘',party:'민주당',votes:111234,pct:21.6}]},
+  '대전광역시':{rate:100,cands:[{name:'염홍철',party:'한나라당',votes:260234,pct:51.5},{name:'박용갑',party:'민주당',votes:245234,pct:48.5}]},
+  '울산광역시':{rate:100,cands:[{name:'박맹우',party:'한나라당',votes:225234,pct:64.2},{name:'박준영',party:'민주당',votes:125234,pct:35.8}]},
   '세종특별자치시':null,
-  '경기도':        {rate:100,cands:[{name:'김문수',party:'한나라당',  votes:2568234,pct:48.0},{name:'유시민',party:'국민참여당',  votes:1875234,pct:35.1},{name:'이계안',party:'민주당',    votes:895234,pct:16.7}]},
-  '강원특별자치도':{rate:100,cands:[{name:'이광재',party:'민주당',    votes:274234, pct:47.8},{name:'엄기영',party:'한나라당',    votes:267234, pct:46.5},{name:'최흥집',party:'자유선진당',votes:33234,pct:5.7}]},
-  '충청북도':      {rate:100,cands:[{name:'이시종',party:'민주당',    votes:271234, pct:46.8},{name:'정우택',party:'한나라당',    votes:261234, pct:45.1},{name:'오탁근',party:'자유선진당',votes:47234,pct:8.1}]},
-  '충청남도':      {rate:100,cands:[{name:'안희정',party:'민주당',    votes:419234, pct:49.6},{name:'박보생',party:'한나라당',    votes:367234, pct:43.5},{name:'심대평',party:'자유선진당',votes:58234,pct:6.9}]},
-  '전북특별자치도':{rate:100,cands:[{name:'김완주',party:'민주당',    votes:388234, pct:61.9},{name:'강현욱',party:'한나라당',    votes:158234, pct:25.2},{name:'허대만',party:'민주노동당',votes:81234,pct:12.9}]},
-  '전라남도':      {rate:100,cands:[{name:'박준영',party:'민주당',    votes:546234, pct:75.1},{name:'이정현',party:'한나라당',    votes:119234, pct:16.4},{name:'서갑원',party:'민주당',    votes:61234,pct:8.5}]},
-  '경상북도':      {rate:100,cands:[{name:'김관용',party:'한나라당',  votes:633234, pct:71.0},{name:'이인기',party:'민주당',      votes:258234, pct:29.0}]},
-  '경상남도':      {rate:100,cands:[{name:'김두관',party:'무소속',    votes:643234, pct:45.0},{name:'이달곤',party:'한나라당',    votes:601234, pct:42.0},{name:'김태호',party:'한나라당',  votes:185234,pct:13.0}]},
-  '제주특별자치도':{rate:100,cands:[{name:'우근민',party:'무소속',    votes:131234, pct:57.6},{name:'김태환',party:'한나라당',    votes:96234,  pct:42.4}]},
+  '경기도':{rate:100,cands:[{name:'김문수',party:'한나라당',votes:2568234,pct:48.0},{name:'유시민',party:'국민참여당',votes:1875234,pct:35.1},{name:'이계안',party:'민주당',votes:895234,pct:16.7}]},
+  '강원특별자치도':{rate:100,cands:[{name:'이광재',party:'민주당',votes:274234,pct:47.8},{name:'엄기영',party:'한나라당',votes:267234,pct:46.5},{name:'최흥집',party:'자유선진당',votes:33234,pct:5.7}]},
+  '충청북도':{rate:100,cands:[{name:'이시종',party:'민주당',votes:271234,pct:46.8},{name:'정우택',party:'한나라당',votes:261234,pct:45.1},{name:'오탁근',party:'자유선진당',votes:47234,pct:8.1}]},
+  '충청남도':{rate:100,cands:[{name:'안희정',party:'민주당',votes:419234,pct:49.6},{name:'박보생',party:'한나라당',votes:367234,pct:43.5},{name:'심대평',party:'자유선진당',votes:58234,pct:6.9}]},
+  '전북특별자치도':{rate:100,cands:[{name:'김완주',party:'민주당',votes:388234,pct:61.9},{name:'강현욱',party:'한나라당',votes:158234,pct:25.2},{name:'허대만',party:'민주노동당',votes:81234,pct:12.9}]},
+  '전라남도':{rate:100,cands:[{name:'박준영',party:'민주당',votes:546234,pct:75.1},{name:'이정현',party:'한나라당',votes:119234,pct:16.4},{name:'서갑원',party:'민주당',votes:61234,pct:8.5}]},
+  '경상북도':{rate:100,cands:[{name:'김관용',party:'한나라당',votes:633234,pct:71.0},{name:'이인기',party:'민주당',votes:258234,pct:29.0}]},
+  '경상남도':{rate:100,cands:[{name:'김두관',party:'무소속',votes:643234,pct:45.0},{name:'이달곤',party:'한나라당',votes:601234,pct:42.0},{name:'김태호',party:'한나라당',votes:185234,pct:13.0}]},
+  '제주특별자치도':{rate:100,cands:[{name:'우근민',party:'무소속',votes:131234,pct:57.6},{name:'김태환',party:'한나라당',votes:96234,pct:42.4}]},
 };
-
-// ── 2026 Mock (선거 전) ──────────────
-const D2026_MOCK = {
-  '서울특별시':    {rate:43.2,cands:[{name:'박민준',party:'더불어민주당',votes:1211423,pct:51.8},{name:'오세현',party:'국민의힘',    votes:987234,pct:42.2},{name:'김나연',party:'조국혁신당',votes:140234,pct:6.0}]},
-  '부산광역시':    {rate:38.4,cands:[{name:'이진구',party:'국민의힘',    votes:389234, pct:54.3},{name:'변성환',party:'더불어민주당',votes:286234,pct:39.9},{name:'정태규',party:'개혁신당',  votes:41234, pct:5.8}]},
-  '대구광역시':    {rate:51.2,cands:[{name:'홍준표',party:'국민의힘',    votes:372234, pct:67.2},{name:'신동현',party:'더불어민주당',votes:148234,pct:26.7},{name:'박재현',party:'무소속',    votes:33892, pct:6.1}]},
-  '인천광역시':    {rate:35.7,cands:[{name:'유정복',party:'더불어민주당',votes:318234, pct:49.8},{name:'최현식',party:'국민의힘',    votes:273234,pct:42.8},{name:'이승재',party:'조국혁신당',votes:47234,pct:7.4}]},
-  '광주광역시':    {rate:62.1,cands:[{name:'강기정',party:'더불어민주당',votes:258234, pct:62.4},{name:'오정훈',party:'조국혁신당',  votes:106234,pct:25.8},{name:'김영현',party:'국민의힘',  votes:48732, pct:11.8}]},
-  '대전광역시':    {rate:29.6,cands:[{name:'이장우',party:'더불어민주당',votes:108234, pct:48.9},{name:'박연수',party:'국민의힘',    votes:98234, pct:44.3},{name:'정민석',party:'개혁신당',  votes:15134, pct:6.8}]},
-  '울산광역시':    {rate:44.3,cands:[{name:'김두겸',party:'국민의힘',    votes:128234, pct:52.1},{name:'이승준',party:'더불어민주당',votes:100234,pct:40.6},{name:'최태희',party:'무소속',    votes:17934, pct:7.3}]},
-  '세종특별자치시':{rate:21.8,cands:[{name:'최민호',party:'더불어민주당',votes:34234,  pct:53.7},{name:'이철주',party:'국민의힘',    votes:24234, pct:38.6},{name:'박준영',party:'조국혁신당',votes:4834,  pct:7.7}]},
-  '경기도':        {rate:37.9,cands:[{name:'김동연',party:'더불어민주당',votes:1873234,pct:50.3},{name:'안철수',party:'국민의힘',    votes:1679234,pct:45.1},{name:'이재학',party:'조국혁신당',votes:171434,pct:4.6}]},
-  '강원특별자치도':{rate:55.2,cands:[{name:'김진태',party:'국민의힘',    votes:198234, pct:55.8},{name:'이상헌',party:'더불어민주당',votes:138234,pct:38.8},{name:'박준형',party:'개혁신당',  votes:19234, pct:5.4}]},
-  '충청북도':      {rate:48.6,cands:[{name:'노현섭',party:'국민의힘',    votes:178234, pct:53.2},{name:'김영진',party:'더불어민주당',votes:138234,pct:41.3},{name:'이태형',party:'무소속',    votes:18424, pct:5.5}]},
-  '충청남도':      {rate:32.4,cands:[{name:'김태흠',party:'더불어민주당',votes:198234, pct:50.7},{name:'이현석',party:'국민의힘',    votes:172234,pct:44.1},{name:'박정수',party:'개혁신당',  votes:20234, pct:5.2}]},
-  '전북특별자치도':{rate:67.7,cands:[{name:'이재명',party:'더불어민주당',votes:278234, pct:55.8},{name:'정성주',party:'조국혁신당',  votes:140234,pct:28.3},{name:'김상현',party:'국민의힘',  votes:78834, pct:15.9}]},
-  '전라남도':      {rate:71.8,cands:[{name:'박영배',party:'더불어민주당',votes:338234, pct:57.3},{name:'김진형',party:'조국혁신당',  votes:148234,pct:25.2},{name:'이규성',party:'국민의힘',  votes:103234,pct:17.5}]},
-  '경상북도':      {rate:59.3,cands:[{name:'이철우',party:'국민의힘',    votes:428234, pct:68.4},{name:'최현철',party:'더불어민주당',votes:158234,pct:25.9},{name:'박재민',party:'무소속',    votes:36834, pct:5.7}]},
-  '경상남도':      {rate:46.7,cands:[{name:'박완수',party:'국민의힘',    votes:428234, pct:56.7},{name:'김정호',party:'더불어민주당',votes:289234,pct:38.4},{name:'이재용',party:'개혁신당',  votes:37034, pct:4.9}]},
-  '제주특별자치도':{rate:27.4,cands:[{name:'오영훈',party:'더불어민주당',votes:67234,  pct:50.8},{name:'이상봉',party:'국민의힘',    votes:58234, pct:44.1},{name:'고성인',party:'무소속',    votes:6734,  pct:5.1}]},
+const D2026_MOCK={
+  '서울특별시':{rate:43.2,cands:[{name:'박민준',party:'더불어민주당',votes:1211423,pct:51.8},{name:'오세현',party:'국민의힘',votes:987234,pct:42.2},{name:'김나연',party:'조국혁신당',votes:140234,pct:6.0}]},
+  '부산광역시':{rate:38.4,cands:[{name:'이진구',party:'국민의힘',votes:389234,pct:54.3},{name:'변성환',party:'더불어민주당',votes:286234,pct:39.9},{name:'정태규',party:'개혁신당',votes:41234,pct:5.8}]},
+  '대구광역시':{rate:51.2,cands:[{name:'홍준표',party:'국민의힘',votes:372234,pct:67.2},{name:'신동현',party:'더불어민주당',votes:148234,pct:26.7},{name:'박재현',party:'무소속',votes:33892,pct:6.1}]},
+  '인천광역시':{rate:35.7,cands:[{name:'유정복',party:'더불어민주당',votes:318234,pct:49.8},{name:'최현식',party:'국민의힘',votes:273234,pct:42.8},{name:'이승재',party:'조국혁신당',votes:47234,pct:7.4}]},
+  '광주광역시':{rate:62.1,cands:[{name:'강기정',party:'더불어민주당',votes:258234,pct:62.4},{name:'오정훈',party:'조국혁신당',votes:106234,pct:25.8},{name:'김영현',party:'국민의힘',votes:48732,pct:11.8}]},
+  '대전광역시':{rate:29.6,cands:[{name:'이장우',party:'더불어민주당',votes:108234,pct:48.9},{name:'박연수',party:'국민의힘',votes:98234,pct:44.3},{name:'정민석',party:'개혁신당',votes:15134,pct:6.8}]},
+  '울산광역시':{rate:44.3,cands:[{name:'김두겸',party:'국민의힘',votes:128234,pct:52.1},{name:'이승준',party:'더불어민주당',votes:100234,pct:40.6},{name:'최태희',party:'무소속',votes:17934,pct:7.3}]},
+  '세종특별자치시':{rate:21.8,cands:[{name:'최민호',party:'더불어민주당',votes:34234,pct:53.7},{name:'이철주',party:'국민의힘',votes:24234,pct:38.6},{name:'박준영',party:'조국혁신당',votes:4834,pct:7.7}]},
+  '경기도':{rate:37.9,cands:[{name:'김동연',party:'더불어민주당',votes:1873234,pct:50.3},{name:'안철수',party:'국민의힘',votes:1679234,pct:45.1},{name:'이재학',party:'조국혁신당',votes:171434,pct:4.6}]},
+  '강원특별자치도':{rate:55.2,cands:[{name:'김진태',party:'국민의힘',votes:198234,pct:55.8},{name:'이상헌',party:'더불어민주당',votes:138234,pct:38.8},{name:'박준형',party:'개혁신당',votes:19234,pct:5.4}]},
+  '충청북도':{rate:48.6,cands:[{name:'노현섭',party:'국민의힘',votes:178234,pct:53.2},{name:'김영진',party:'더불어민주당',votes:138234,pct:41.3},{name:'이태형',party:'무소속',votes:18424,pct:5.5}]},
+  '충청남도':{rate:32.4,cands:[{name:'김태흠',party:'더불어민주당',votes:198234,pct:50.7},{name:'이현석',party:'국민의힘',votes:172234,pct:44.1},{name:'박정수',party:'개혁신당',votes:20234,pct:5.2}]},
+  '전북특별자치도':{rate:67.7,cands:[{name:'이재명',party:'더불어민주당',votes:278234,pct:55.8},{name:'정성주',party:'조국혁신당',votes:140234,pct:28.3},{name:'김상현',party:'국민의힘',votes:78834,pct:15.9}]},
+  '전라남도':{rate:71.8,cands:[{name:'박영배',party:'더불어민주당',votes:338234,pct:57.3},{name:'김진형',party:'조국혁신당',votes:148234,pct:25.2},{name:'이규성',party:'국민의힘',votes:103234,pct:17.5}]},
+  '경상북도':{rate:59.3,cands:[{name:'이철우',party:'국민의힘',votes:428234,pct:68.4},{name:'최현철',party:'더불어민주당',votes:158234,pct:25.9},{name:'박재민',party:'무소속',votes:36834,pct:5.7}]},
+  '경상남도':{rate:46.7,cands:[{name:'박완수',party:'국민의힘',votes:428234,pct:56.7},{name:'김정호',party:'더불어민주당',votes:289234,pct:38.4},{name:'이재용',party:'개혁신당',votes:37034,pct:4.9}]},
+  '제주특별자치도':{rate:27.4,cands:[{name:'오영훈',party:'더불어민주당',votes:67234,pct:50.8},{name:'이상봉',party:'국민의힘',votes:58234,pct:44.1},{name:'고성인',party:'무소속',votes:6734,pct:5.1}]},
 };
-
-const HISTORICAL = {
-  '20260603': D2026_MOCK,
-  '20220601': D2022,
-  '20180613': D2018,
-  '20140604': D2014,
-  '20100602': D2010,
-};
-
-// winner 자동 주입
+const HISTORICAL={'20260603':D2026_MOCK,'20220601':D2022,'20180613':D2018,'20140604':D2014,'20100602':D2010};
 Object.values(HISTORICAL).forEach(ed=>{
-  if(!ed) return;
-  Object.keys(ed).forEach(k=>{ if(ed[k]) ed[k].winner=ed[k].cands[0].party; });
+  if(!ed)return;
+  Object.keys(ed).forEach(k=>{if(ed[k])ed[k].winner=ed[k].cands[0].party;});
 });
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  SIDO
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 const SIDO_ALL=['서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시','세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도','경상북도','경상남도','제주특별자치도'];
 const SIDO_CODE={'서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28','광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36','경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44','전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50'};
-// kostat 옛 이름 + gadm 영어 이름 → 현재 한국어 시도명 매핑
+
+// gadm 영어명 + kostat 구버전명 → 현재 한국어명
 const GEO_NORM={
-  // kostat 구버전
   '강원도':'강원특별자치도','전라북도':'전북특별자치도',
-  // gadm NAME_1 (영어)
   'Seoul':'서울특별시','Busan':'부산광역시','Daegu':'대구광역시',
   'Incheon':'인천광역시','Gwangju':'광주광역시','Daejeon':'대전광역시',
   'Ulsan':'울산광역시','Sejong':'세종특별자치시',
-  'Gyeonggi-do':'경기도','Gangwon-do':'강원특별자치도',
+  'Gyeonggi-do':'경기도','Gangwon-do':'강원특별자치도','Gangwon':'강원특별자치도',
   'Chungcheongbuk-do':'충청북도','Chungcheongnam-do':'충청남도',
-  'Jeollabuk-do':'전북특별자치도','Jeollanam-do':'전라남도',
-  'Gyeongsangbuk-do':'경상북도','Gyeongsangnam-do':'경상남도',
-  'Jeju':'제주특별자치도',
-  // 혹시 있을 수 있는 변형
-  'Gangwon':'강원특별자치도','Jeju-do':'제주특별자치도',
   'North Chungcheong':'충청북도','South Chungcheong':'충청남도',
-  'North Gyeongsang':'경상북도','South Gyeongsang':'경상남도',
+  'Jeollabuk-do':'전북특별자치도','Jeollanam-do':'전라남도',
   'North Jeolla':'전북특별자치도','South Jeolla':'전라남도',
+  'Gyeongsangbuk-do':'경상북도','Gyeongsangnam-do':'경상남도',
+  'North Gyeongsang':'경상북도','South Gyeongsang':'경상남도',
+  'Jeju':'제주특별자치도','Jeju-do':'제주특별자치도',
 };
 const normName=n=>GEO_NORM[n]||n;
+const getGeoName=p=>p.name||p.adm_nm||p.CTP_KOR_NM||p.SIG_KOR_NM||p.KOR_NM||p.NAME_2||p.NAME_1||'';
+const getGeoCode=p=>String(p.code||p.adm_cd||p.id||p.CTPRVN_CD||p.SIG_CD||p.ID_1||p.id_1||'');
 const shortSido=n=>n.replace('특별자치도','').replace('특별자치시','').replace('특별시','시').replace('광역시','시').replace(/^경상/,'경').replace(/^충청/,'충');
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  STATE
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 let ST={
   sidoGeo:null,sigunguGeo:null,geoLoaded:false,
   currentSgId:'20260603',
   data:JSON.parse(JSON.stringify(D2026_MOCK)),
   dataSource:'mock',
   selectedSido:null,hoveredName:null,
+  showLabels:true,
   mode:'mock',apiKey:'',proxyUrl:'',
+  sgisKey:'',sgisSecret:'',
   pollSec:30,isLive:false,pollTimer:null,
+  // D3
+  zoom:null,projFn:null,pathFn:null,mapW:0,mapH:0,
 };
 const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
 
-// ═══════════════════════════════════════════════════════
-//  GEO JSON
-//  우선순위: ① 레포 내 geo/ 폴더 (SGIS 다운로드 후 커밋)
-//           ② southkorea-maps gadm/kostat (CDN/raw 자동 폴백)
-// ═══════════════════════════════════════════════════════
-const GEO_CANDIDATES = {
-  sido: [
-    './geo/sido.json',
-    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-provinces-geo.json',
-    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-provinces-geo.json',
-    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/kostat/2013/json/skorea-provinces-geo.json',
-    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea-provinces-geo.json',
-  ],
-  sigungu: [
-    './geo/sigungu.json',
-    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-municipalities-geo.json',
-    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-municipalities-geo.json',
-    'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/kostat/2013/json/skorea-municipalities-geo.json',
-    'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea-municipalities-geo.json',
-  ],
-};
-
-// 소스마다 속성명 다름 → 통합 추출
-// SGIS: adm_nm/adm_cd  |  kostat: name/code  |  gadm: NAME_1/ID_1
-const getGeoName = p =>
-  p.name || p.adm_nm || p.CTP_KOR_NM || p.SIG_KOR_NM || p.KOR_NM || p.NAME_2 || p.NAME_1 || '';
-// gadm 시도: NAME_1=영어, 시군구: NAME_2=영어 → normName으로 한국어 변환
-// kostat: name=한국어, SGIS: adm_nm=한국어
-const getGeoCode = p =>
-  String(p.code || p.adm_cd || p.id || p.CTPRVN_CD || p.SIG_CD || p.ID_1 || p.id_1 || '');
-
-async function fetchFirstWorking(urls) {
-  for (const url of urls) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const src = url.startsWith('./') ? '로컬(SGIS)' : new URL(url).hostname;
-        console.log(`[GeoJSON OK] ${url.split('/').pop()} ← ${src}`);
-        return await res.json();
-      }
-    } catch(e) { /* 다음 URL 시도 */ }
+// ═══════════════════════════════════════
+//  UTM-K (EPSG:5179) → WGS84
+// ═══════════════════════════════════════
+function utmkToWgs84(x,y){
+  const a=6378137.0,e2=0.00669438002290,k0=1.0;
+  const dx=1000000.0,dy=2000000.0;
+  const lo=127.5*Math.PI/180,po=38.0*Math.PI/180;
+  const px=x-dx,py=y-dy;
+  const e4=e2*e2,e6=e4*e2;
+  const M0=a*((1-e2/4-3*e4/64-5*e6/256)*po-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*po)+(15*e4/256+45*e6/1024)*Math.sin(4*po)-(35*e6/3072)*Math.sin(6*po));
+  const M=M0+py/k0;
+  const mu=M/(a*(1-e2/4-3*e4/64-5*e6/256));
+  const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  const p=mu+(3*e1/2-27*Math.pow(e1,3)/32)*Math.sin(2*mu)+(21*e1*e1/16-55*Math.pow(e1,4)/32)*Math.sin(4*mu)+(151*Math.pow(e1,3)/96)*Math.sin(6*mu)+(1097*Math.pow(e1,4)/512)*Math.sin(8*mu);
+  const sp=Math.sin(p),cp=Math.cos(p),tp=sp/cp;
+  const N=a/Math.sqrt(1-e2*sp*sp),T=tp*tp,C=e2/(1-e2)*cp*cp;
+  const R=a*(1-e2)/Math.pow(1-e2*sp*sp,1.5),D=px/(N*k0);
+  const lat=p-(N*tp/R)*(D*D/2-(5+3*T+10*C-4*C*C-9*e2/(1-e2))*Math.pow(D,4)/24+(61+90*T+298*C+45*T*T-252*e2/(1-e2)-3*C*C)*Math.pow(D,6)/720);
+  const lon=lo+(D-(1+2*T+C)*D*D*D/6+(5-2*C+28*T-3*C*C+8*e2/(1-e2)+24*T*T)*Math.pow(D,5)/120)/cp;
+  return[lon*180/Math.PI,lat*180/Math.PI];
+}
+function convCoords(c){
+  if(!c||!c.length)return c;
+  if(typeof c[0]==='number'){
+    const r=utmkToWgs84(c[0],c[1]);
+    return[Math.round(r[0]*100000)/100000,Math.round(r[1]*100000)/100000];
   }
-  throw new Error('모든 GeoJSON URL 실패');
+  return c.map(convCoords);
+}
+function needsConversion(geo){
+  try{
+    let c=geo.features[0]?.geometry?.coordinates;
+    while(Array.isArray(c[0]))c=c[0];
+    return Math.abs(c[0])>500;
+  }catch{return false;}
+}
+function convertGeoJSON(geo){
+  if(!needsConversion(geo))return geo;
+  return{...geo,features:geo.features.map(f=>({...f,geometry:{...f.geometry,coordinates:convCoords(f.geometry.coordinates)}}))};
+}
+function normalizeGeoJSON(geo){
+  // 속성명 통일: name, code로
+  return{...geo,features:geo.features.map(f=>{
+    const p=f.properties;
+    const name=getGeoName(p);
+    const code=getGeoCode(p);
+    return{...f,properties:{...p,name,code}};
+  })};
 }
 
-async function loadGeo(){
+// ═══════════════════════════════════════
+//  SGIS API
+// ═══════════════════════════════════════
+async function getSgisToken(){
+  const key=ST.sgisKey,secret=ST.sgisSecret,proxy=ST.proxyUrl;
+  if(!key||!secret||!proxy)throw new Error('SGIS 키 또는 프록시 없음');
+  const url=`https://sgisapi.kostat.go.kr/OpenAPI3/auth/authentication.json?consumer_key=${encodeURIComponent(key)}&consumer_secret=${encodeURIComponent(secret)}`;
+  const res=await fetch(proxy.replace(/\/$/,'')+`?url=${encodeURIComponent(url)}`);
+  if(!res.ok)throw new Error(`Auth HTTP ${res.status}`);
+  const d=await res.json();
+  if(d.errCd!==0)throw new Error(`SGIS Auth: ${d.errMsg}`);
+  return d.result.accessToken;
+}
+async function fetchSgisBoundary(token,admCd,lowSearch,year='2023'){
+  const proxy=ST.proxyUrl;
+  const url=`https://sgisapi.kostat.go.kr/OpenAPI3/boundary/hadmarea.geojson?accessToken=${encodeURIComponent(token)}&year=${year}&adm_cd=${encodeURIComponent(admCd)}&low_search=${lowSearch}`;
+  const res=await fetch(proxy.replace(/\/$/,'')+`?url=${encodeURIComponent(url)}`);
+  if(!res.ok&&res.status!==422)throw new Error(`Boundary HTTP ${res.status}`);
+  if(res.status===422)return null;
+  const d=await res.json();
+  if(d.errCd!==0)return null;
+  return d.features||null;
+}
+
+async function fetchSGISGeo(){
+  const btn=document.querySelector('[onclick="fetchSGISGeo()"]');
   try{
-    const[sido,sigungu]=await Promise.all([
-      fetchFirstWorking(GEO_CANDIDATES.sido),
-      fetchFirstWorking(GEO_CANDIDATES.sigungu),
-    ]);
-    ST.sidoGeo=sido;ST.sigunguGeo=sigungu;ST.geoLoaded=true;
-    document.getElementById('loading-wrap').style.display='none';
+    document.getElementById('cache-status').textContent='토큰 발급 중...';
+    if(btn){btn.disabled=true;btn.textContent='로딩 중...';}
+    const token=await getSgisToken();
+    document.getElementById('cache-status').textContent='시도 경계 다운로드 중...';
+
+    // 전국 시도 (여러 연도 시도)
+    let sidoFeatures=null;
+    for(const year of['2023','2022','2021','2020']){
+      const f=await fetchSgisBoundary(token,'',0,year)||await fetchSgisBoundary(token,'00',0,year);
+      if(f&&f.length){sidoFeatures=f;console.log(`시도 year=${year} OK`);break;}
+    }
+    if(!sidoFeatures||!sidoFeatures.length)throw new Error('시도 데이터 없음');
+
+    // 시군구 (시도별)
+    document.getElementById('cache-status').textContent='시군구 경계 다운로드 중...';
+    const sggAll=[];
+    for(const sf of sidoFeatures){
+      const p=sf.properties;
+      const code=String(p.adm_cd||p.sido_cd||'').replace(/0+$/,'').slice(0,2);
+      const sidoName=normName(getGeoName(p));
+      if(!code)continue;
+      try{
+        const f=await fetchSgisBoundary(token,p.adm_cd||code,1);
+        if(f)f.forEach(ff=>{ff.properties.sido=code;ff.properties.sidoName=sidoName;sggAll.push(ff);});
+      }catch(e){console.warn('시군구 오류:',sidoName,e.message);}
+    }
+
+    const sidoGeo=normalizeGeoJSON(convertGeoJSON({type:'FeatureCollection',features:sidoFeatures}));
+    const sigunguGeo=normalizeGeoJSON(convertGeoJSON({type:'FeatureCollection',features:sggAll}));
+
+    // localStorage 캐시
+    const cacheData={sido:sidoGeo,sigungu:sigunguGeo,ts:Date.now()};
+    try{localStorage.setItem('el_geo_cache',JSON.stringify(cacheData));}catch(e){console.warn('캐시 저장 실패 (용량 초과):',e.message);}
+
+    ST.sidoGeo=sidoGeo;ST.sigunguGeo=sigunguGeo;ST.geoLoaded=true;
+    document.getElementById('cache-status').textContent=`✅ ${new Date().toLocaleString('ko-KR')} 갱신`;
     renderAll();
   }catch(e){
-    document.getElementById('loading-txt').textContent='지도 로딩 실패 (네트워크 확인)';
+    document.getElementById('cache-status').textContent=`❌ 오류: ${e.message}`;
+    console.error(e);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🗺 SGIS 지도 갱신';}
   }
 }
 
-// ═══════════════════════════════════
-//  ELECTION TABS
-// ═══════════════════════════════════
-function renderTabs(){
-  document.getElementById('election-tabs').innerHTML=ELECTIONS.map(e=>{
-    const active=e.sgId===ST.currentSgId?'active':'';
-    const badge=e.status==='upcoming'
-      ?`<span class="tab-badge upcoming">예정</span>`
-      :`<span class="tab-badge done">확정</span>`;
-    return `<div class="etab ${active}" onclick="switchElection('${e.sgId}')">
-      <span class="tab-year">${e.year}</span>
-      <span class="tab-num">${e.round}</span>${badge}
-    </div>`;
-  }).join('');
+function clearGeoCache(){
+  localStorage.removeItem('el_geo_cache');
+  document.getElementById('cache-status').textContent='캐시 삭제됨. 페이지 새로고침 시 CDN에서 로드';
 }
 
-async function switchElection(sgId){
-  if(ST.isLive)toggleLive();
-  stopPolling();
-  ST.currentSgId=sgId;
-  ST.selectedSido=null;
-  ST.hoveredName=null;
-  const el=curEl();
-  const builtin=HISTORICAL[sgId];
-  if(builtin){
-    ST.data=JSON.parse(JSON.stringify(builtin));
-    ST.dataSource=el.status==='upcoming'?'mock':'builtin';
+// ═══════════════════════════════════════
+//  GEO JSON LOADING
+// ═══════════════════════════════════════
+const GEO_CDN=[
+  {sido:'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-provinces-geo.json',sigungu:'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-municipalities-geo.json'},
+  {sido:'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-provinces-geo.json',sigungu:'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-municipalities-geo.json'},
+  {sido:'./geo/sido.json',sigungu:'./geo/sigungu.json'},
+];
+async function tryFetch(url){
+  try{const r=await fetch(url);if(r.ok)return await r.json();}catch{}
+  return null;
+}
+async function loadGeo(){
+  setLoadingTxt('지도 데이터 로딩 중...');
+
+  // 1. localStorage 캐시
+  try{
+    const cached=JSON.parse(localStorage.getItem('el_geo_cache')||'null');
+    if(cached?.sido&&cached?.sigungu){
+      const age=Math.round((Date.now()-cached.ts)/3600000);
+      ST.sidoGeo=cached.sido;ST.sigunguGeo=cached.sigungu;ST.geoLoaded=true;
+      setLoadingTxt('');document.getElementById('loading-wrap').style.display='none';
+      console.log(`캐시 사용 (${age}시간 전)`);renderAll();return;
+    }
+  }catch{}
+
+  // 2. CDN fallback
+  setLoadingTxt('지도 CDN 연결 중...');
+  let sidoGeo=null,sigunguGeo=null;
+  for(const src of GEO_CDN){
+    setLoadingTxt(`지도 로딩: ${src.sido.split('/').pop()}`);
+    const [s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
+    if(s&&sg){sidoGeo=normalizeGeoJSON(s);sigunguGeo=normalizeGeoJSON(sg);break;}
   }
-  renderTabs();
-  updateHeader();
-  clearDetail();
-  if(ST.geoLoaded)renderAll();
+  if(!sidoGeo){setLoadingTxt('지도 로딩 실패 — 설정에서 SGIS 키를 입력하고 [SGIS 지도 갱신] 클릭');return;}
+
+  ST.sidoGeo=sidoGeo;ST.sigunguGeo=sigunguGeo;ST.geoLoaded=true;
+  document.getElementById('loading-wrap').style.display='none';
+  renderAll();
+}
+function setLoadingTxt(t){
+  const el=document.getElementById('loading-txt');if(el)el.textContent=t||'로딩 완료';
 }
 
-function updateHeader(){
-  const el=curEl();
-  document.getElementById('hd-year').textContent=`${el.year} 개표현황`;
-  document.getElementById('header-sub').textContent=`${el.round} · ${el.date} · 광역단체장(시·도지사)`;
-  document.getElementById('btn-live').style.display=isUpcoming()?'block':'none';
-  // API 불러오기: 역대 선거 + API 설정 있을 때
-  document.getElementById('btn-fetch').style.display=(!isUpcoming()&&ST.apiKey&&ST.proxyUrl)?'block':'none';
-  const b=document.getElementById('data-src-badge');
-  b.className=ST.dataSource;
-  b.textContent=ST.dataSource==='builtin'?'내장 확정 데이터':ST.dataSource==='api'?'선관위 API':'MOCK 데이터';
+// ═══════════════════════════════════════
+//  D3 MAP  (zoom 기반, 드릴다운 시 지도 유지)
+// ═══════════════════════════════════════
+let _proj=null,_path=null;
+
+function initZoom(){
+  const svg=d3.select('#map-svg');
+  ST.zoom=d3.zoom().scaleExtent([1,20]).on('zoom',({transform})=>{
+    svg.select('#map-g').attr('transform',transform);
+    // 선 두께 역보정
+    svg.selectAll('.sido-path').attr('stroke-width',0.7/transform.k);
+    svg.selectAll('.sgg-path').attr('stroke-width',0.4/transform.k);
+  });
+  svg.call(ST.zoom);
+  svg.on('dblclick.zoom',null); // 더블클릭 줌 비활성
 }
 
-// ═══════════════════════════════════
-//  MAP
-// ═══════════════════════════════════
 function renderMap(){
   if(!ST.geoLoaded)return;
+  const svgEl=document.getElementById('map-svg');
+  const W=svgEl.clientWidth||700,H=svgEl.clientHeight||600;
+  ST.mapW=W;ST.mapH=H;
+
   const svg=d3.select('#map-svg');
-  svg.selectAll('*').remove();
-  const W=svg.node().clientWidth||600,H=svg.node().clientHeight||700;
   svg.attr('viewBox',`0 0 ${W} ${H}`);
-  const isDrill=!!ST.selectedSido;
-  let features,geoFit;
-  if(isDrill&&ST.sigunguGeo){
-    const code=SIDO_CODE[ST.selectedSido]||'';
-    const f=ST.sigunguGeo.features.filter(f=>{
-      const c=getGeoCode(f.properties);
-      const s=f.properties.sido||'';
-      // SGIS/kostat: code로 필터, gadm: sido 속성으로 fallback
-      if(c) return c.startsWith(code);
-      if(s) return s===code||s===ST.selectedSido;
-      // gadm fallback: 시도명으로 필터 (NAME_2 등 포함)
-      const pName=f.properties.NAME_1||f.properties.name||'';
-      return normName(pName)===ST.selectedSido;
-    });
-    features=f;geoFit={type:'FeatureCollection',features:f};
-  }else{features=ST.sidoGeo.features;geoFit=ST.sidoGeo;}
-  if(!features.length)return;
 
-  const proj=d3.geoMercator().fitExtent([[26,26],[W-26,H-26]],geoFit);
-  const path=d3.geoPath().projection(proj);
-  const g=svg.append('g');
+  if(!ST.zoom)initZoom();
 
-  g.selectAll('path').data(features).join('path')
-    .attr('d',path)
-    .attr('fill',(d,i)=>{
-      if(isDrill){
-        const s=ST.data[ST.selectedSido];
-        const base=s?pc(s.winner):'#1a2540';
-        const alpha=Math.round((0.48+((i*37+11)%50)/100)*255).toString(16).padStart(2,'0');
-        return base+alpha;
-      }
-      const nm=normName(getGeoName(d.properties));
+  // g 재사용
+  let g=svg.select('#map-g');
+  if(g.empty())g=svg.append('g').attr('id','map-g');
+  g.selectAll('*').remove();
+
+  // 프로젝션 (항상 전국 기준)
+  _proj=d3.geoMercator().fitExtent([[20,20],[W-20,H-20]],ST.sidoGeo);
+  _path=d3.geoPath().projection(_proj);
+
+  // ── 시도 레이어 ──
+  const sidoG=g.append('g').attr('id','sido-layer');
+  sidoG.selectAll('.sido-path').data(ST.sidoGeo.features).join('path')
+    .attr('class','sido-path')
+    .attr('d',_path)
+    .attr('fill',d=>{
+      const nm=normName(d.properties.name||getGeoName(d.properties));
+      if(ST.selectedSido&&nm!==ST.selectedSido)return pc(ST.data[nm]?.winner)||'#111a30';
       const d2=ST.data[nm];
       return d2?pc(d2.winner):'#111a30';
     })
-    .attr('stroke','#04060e').attr('stroke-width',isDrill?.3:.6)
-    .style('cursor',isDrill?'default':'pointer')
-    .on('mouseover',function(event,d){
-      d3.select(this).attr('opacity',.7);
-      const nm=isDrill?ST.selectedSido:normName(getGeoName(d.properties));
-      ST.hoveredName=nm;
-      showTooltip(event,isDrill?getGeoName(d.properties):nm,nm,isDrill,W);
-      if(!isDrill)showDetail(nm);
+    .attr('fill-opacity',d=>{
+      if(!ST.selectedSido)return 1;
+      const nm=normName(d.properties.name||getGeoName(d.properties));
+      return nm===ST.selectedSido?1:0.28;
     })
-    .on('mousemove',(event)=>moveTooltip(event,W))
-    .on('mouseout',function(){
-      d3.select(this).attr('opacity',1);
+    .attr('stroke','#04060e').attr('stroke-width',0.7)
+    .style('cursor','pointer')
+    .on('mouseover',function(event,d){
+      d3.select(this).attr('fill-opacity',d=>{
+        const nm=normName(d.properties.name||getGeoName(d.properties));
+        if(ST.selectedSido&&nm!==ST.selectedSido)return 0.35;
+        return 0.75;
+      });
+      const nm=normName(d.properties.name||getGeoName(d.properties));
+      ST.hoveredName=nm;
+      showTooltip(event,nm,W);
+      showDetail(nm);
+    })
+    .on('mousemove',event=>moveTooltip(event,W))
+    .on('mouseout',function(event,d){
+      d3.select(this).attr('fill-opacity',d=>{
+        const nm=normName(d.properties.name||getGeoName(d.properties));
+        if(ST.selectedSido&&nm!==ST.selectedSido)return 0.28;
+        return 1;
+      });
       ST.hoveredName=null;hideTooltip();
       if(!ST.selectedSido)clearDetail();
     })
-    .on('click',(event,d)=>{if(!isDrill)drillDown(normName(getGeoName(d.properties)));});
+    .on('click',(event,d)=>{
+      const nm=normName(d.properties.name||getGeoName(d.properties));
+      if(ST.selectedSido===nm)drillUp();else drillDown(nm);
+    });
 
-  if(!isDrill){
-    g.selectAll('text').data(ST.sidoGeo.features).join('text')
-      .attr('transform',d=>{const c=path.centroid(d);return `translate(${c[0]},${c[1]})`;})
-      .attr('text-anchor','middle').attr('dominant-baseline','middle')
-      .attr('font-size',d=>normName(getGeoName(d.properties))==='경기도'?'12':'10')
-      .attr('font-weight','700').attr('fill','rgba(255,255,255,.82)').attr('pointer-events','none')
-      .text(d=>shortSido(normName(getGeoName(d.properties))));
-  }else{
-    g.selectAll('text').data(features).join('text')
-      .attr('transform',d=>{const c=path.centroid(d);return `translate(${c[0]},${c[1]})`;})
-      .attr('text-anchor','middle').attr('dominant-baseline','middle')
-      .attr('font-size','8').attr('fill','rgba(255,255,255,.6)').attr('pointer-events','none')
-      .text(d=>getGeoName(d.properties).replace(/시$|구$|군$/,''));
+  // ── 시군구 레이어 (드릴다운 시) ──
+  renderSggLayer(g);
+
+  // ── 레이블 ──
+  renderLabels(g);
+
+  // ── 드릴다운 상태 복원 ──
+  if(ST.selectedSido){
+    zoomToSido(ST.selectedSido,false);
   }
-  document.getElementById('back-btn').style.display=isDrill?'block':'none';
-  document.getElementById('map-label').innerHTML=isDrill
-    ?`${ST.selectedSido} → 시군구별 현황`
-    :`시도별 당선 현황 <small>클릭 → 시군구 드릴다운</small>`;
-  renderLegend();
 }
 
-function drillDown(n){ST.selectedSido=n;highlightListItem(n);showDetail(n);renderMap();}
-function drillUp(){ST.selectedSido=null;clearDetail();renderMap();}
+function renderSggLayer(g){
+  const sggG=g.append('g').attr('id','sgg-layer');
+  if(!ST.selectedSido||!ST.sigunguGeo)return;
 
-// ═══════════════════════════════════
+  const code=SIDO_CODE[ST.selectedSido]||'';
+  const sggFeatures=ST.sigunguGeo.features.filter(f=>{
+    const c=f.properties.code||getGeoCode(f.properties);
+    if(c&&code&&c.toString().startsWith(code))return true;
+    // gadm fallback: NAME_1 영어명 비교
+    const n1=normName(f.properties.NAME_1||f.properties.name||'');
+    return n1===ST.selectedSido;
+  });
+  if(!sggFeatures.length)return;
+
+  sggG.selectAll('.sgg-path').data(sggFeatures).join('path')
+    .attr('class','sgg-path')
+    .attr('d',_path)
+    .attr('fill','none')
+    .attr('stroke','rgba(255,255,255,0.55)')
+    .attr('stroke-width',0.4)
+    .style('cursor','default')
+    .on('mouseover',function(event,d){
+      d3.select(this).attr('stroke','rgba(255,255,255,0.9)').attr('stroke-width',0.8);
+      const sggName=d.properties.name||getGeoName(d.properties)||'';
+      showTooltipSgg(event,sggName,ST.selectedSido,W);
+    })
+    .on('mousemove',event=>moveTooltip(event,ST.mapW))
+    .on('mouseout',function(){
+      d3.select(this).attr('stroke','rgba(255,255,255,0.55)').attr('stroke-width',0.4);
+      hideTooltip();
+    });
+
+  // 시군구 이름 레이블
+  if(ST.showLabels){
+    sggG.selectAll('.sgg-label').data(sggFeatures).join('text')
+      .attr('class','sgg-label')
+      .attr('transform',d=>{const c=_path.centroid(d);return `translate(${c[0]},${c[1]})`;})
+      .attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .attr('font-size','7').attr('fill','rgba(255,255,255,.65)')
+      .attr('pointer-events','none')
+      .text(d=>(d.properties.name||getGeoName(d.properties)).replace(/시$|구$|군$/,''));
+  }
+}
+
+function renderLabels(g){
+  if(!ST.sidoGeo)return;
+  const lG=g.append('g').attr('id','label-layer');
+  if(!ST.showLabels)return;
+  lG.selectAll('.sido-label').data(ST.sidoGeo.features).join('text')
+    .attr('class','sido-label')
+    .attr('transform',d=>{const c=_path.centroid(d);return `translate(${c[0]},${c[1]})`;})
+    .attr('text-anchor','middle').attr('dominant-baseline','middle')
+    .attr('font-family',"'Noto Sans KR',sans-serif")
+    .attr('font-size',d=>{const nm=normName(d.properties.name||getGeoName(d.properties));return nm==='경기도'?'13':'11';})
+    .attr('font-weight','700').attr('fill','rgba(255,255,255,.88)')
+    .attr('pointer-events','none')
+    .attr('opacity',d=>{
+      if(!ST.selectedSido)return 1;
+      return normName(d.properties.name||getGeoName(d.properties))===ST.selectedSido?1:0;
+    })
+    .text(d=>shortSido(normName(d.properties.name||getGeoName(d.properties))));
+}
+
+function toggleLabels(show){
+  ST.showLabels=show;
+  document.getElementById('lbl-toggle-btn').classList.toggle('active',show);
+  renderMap();
+}
+
+// ── 드릴다운 (지도 유지하면서 줌) ──
+function drillDown(name){
+  ST.selectedSido=name;
+  document.getElementById('back-btn').style.display='block';
+  highlightListItem(name);
+  showDetail(name);
+  // 시도 레이어 업데이트 (opacity)
+  d3.selectAll('.sido-path').attr('fill-opacity',(d,i,nodes)=>{
+    const nm=normName(d3.select(nodes[i]).datum().properties.name||getGeoName(d3.select(nodes[i]).datum().properties));
+    return nm===name?1:0.28;
+  });
+  // 레이블 opacity
+  d3.selectAll('.sido-label').attr('opacity',function(d){
+    return normName(d.properties.name||getGeoName(d.properties))===name?1:0;
+  });
+  // 시군구 레이어 추가
+  const g=d3.select('#map-g');
+  d3.select('#sgg-layer').remove();
+  renderSggLayer(g);
+  // 줌
+  zoomToSido(name,true);
+}
+
+function drillUp(){
+  ST.selectedSido=null;
+  document.getElementById('back-btn').style.display='none';
+  clearDetail();
+  // 모든 시도 정상 opacity
+  d3.selectAll('.sido-path').attr('fill-opacity',1);
+  d3.selectAll('.sido-label').attr('opacity',1);
+  d3.select('#sgg-layer').remove();
+  // 줌 아웃
+  d3.select('#map-svg').transition().duration(600).call(ST.zoom.transform,d3.zoomIdentity);
+}
+
+function zoomToSido(name,animate){
+  if(!_proj||!_path)return;
+  const feature=ST.sidoGeo.features.find(f=>normName(f.properties.name||getGeoName(f.properties))===name);
+  if(!feature)return;
+  const W=ST.mapW,H=ST.mapH;
+  const b=_path.bounds(feature);
+  const dx=b[1][0]-b[0][0],dy=b[1][1]-b[0][1];
+  if(!dx||!dy)return;
+  const cx=(b[0][0]+b[1][0])/2,cy=(b[0][1]+b[1][1])/2;
+  const scale=Math.max(1,Math.min(18,0.82/Math.max(dx/W,dy/H)));
+  const tx=W/2-scale*cx,ty=H/2-scale*cy;
+  const transform=d3.zoomIdentity.translate(tx,ty).scale(scale);
+  const sel=d3.select('#map-svg');
+  if(animate)sel.transition().duration(650).call(ST.zoom.transform,transform);
+  else sel.call(ST.zoom.transform,transform);
+}
+
+// ═══════════════════════════════════════
 //  TOOLTIP
-// ═══════════════════════════════════
-function showTooltip(event,dispName,dataName,isDrill,mapW){
-  const d=ST.data[dataName];if(!d)return;
+// ═══════════════════════════════════════
+function showTooltip(event,nm,mapW){
+  const d=ST.data[nm];if(!d)return;
   const tt=document.getElementById('tooltip');
-  let html=`<div class="tt-name">${dispName}</div>`;
-  if(isDrill)html+=`<div class="tt-sub-lbl">${ST.selectedSido} 전체 집계 기준</div>`;
-  html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><div style="width:8px;height:8px;border-radius:2px;background:${pc(d.winner)}"></div><span style="font-size:12px;font-weight:700;color:${pc(d.winner)}">${d.winner}</span></div>`;
+  let html=`<div style="font-size:13px;font-weight:700;margin-bottom:4px">${nm}</div>`;
+  html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:2px;background:${pc(d.winner)}"></div><span style="font-size:12px;font-weight:700;color:${pc(d.winner)}">${d.winner}</span></div>`;
   html+=`<div style="font-size:11px;color:var(--sub);margin-bottom:7px">개표율 ${d.rate.toFixed(1)}%</div>`;
   (d.cands||[]).slice(0,3).forEach((c,i)=>{
-    html+=`<div style="margin-bottom:6px">
-      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
-        <span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name} <span style="color:${pc(c.party)};font-size:10px">${ps(c.party)}</span></span>
-        <span style="font-weight:700;color:${pc(c.party)}">${c.pct}%</span>
-      </div>
-      <div class="tt-bar"><div class="tt-fill" style="width:${c.pct}%;background:${pc(c.party)};opacity:${i===0?1:.4}"></div></div>
-      <div class="tt-votes">${fmt(c.votes)}표</div>
-    </div>`;
+    html+=`<div style="margin-bottom:5px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px"><span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name} <span style="color:${pc(c.party)};font-size:10px">${ps(c.party)}</span></span><span style="font-weight:700;color:${pc(c.party)}">${c.pct}%</span></div><div class="tt-bar"><div class="tt-fill" style="width:${c.pct}%;background:${pc(c.party)};opacity:${i===0?1:.4}"></div></div><div class="tt-votes">${fmt(c.votes)}표</div></div>`;
   });
   tt.innerHTML=html;tt.classList.add('on');moveTooltip(event,mapW);
 }
-function moveTooltip(event,mapW){
+function showTooltipSgg(event,sggName,sidoName,mapW){
+  const d=ST.data[sidoName];
   const tt=document.getElementById('tooltip');
-  if(!tt.classList.contains('on'))return;
+  let html=`<div style="font-size:12px;font-weight:700;margin-bottom:3px">${sggName}</div>`;
+  html+=`<div style="font-size:10px;color:var(--dim);margin-bottom:6px">${sidoName}</div>`;
+  if(d){
+    html+=`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px"><div style="width:7px;height:7px;border-radius:2px;background:${pc(d.winner)}"></div><span style="font-size:11px;font-weight:700;color:${pc(d.winner)}">${d.winner}</span></div>`;
+    html+=`<div style="font-size:10px;color:var(--sub)">시·도지사 당선</div>`;
+  }
+  tt.innerHTML=html;tt.classList.add('on');moveTooltip(event,mapW);
+}
+function moveTooltip(event,mapW){
+  const tt=document.getElementById('tooltip');if(!tt.classList.contains('on'))return;
   const rect=document.getElementById('map-area').getBoundingClientRect();
   const x=event.clientX-rect.left,y=event.clientY-rect.top;
   const tw=tt.offsetWidth+18;
-  tt.style.left=x+tw>mapW?(x-tw+12)+'px':(x+14)+'px';
-  tt.style.top=Math.min(y-10,rect.height-230)+'px';
+  tt.style.left=(x+tw>mapW?x-tw+12:x+14)+'px';
+  tt.style.top=Math.min(y-10,rect.height-240)+'px';
 }
 function hideTooltip(){document.getElementById('tooltip').classList.remove('on');}
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  DETAIL PANEL
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 function showDetail(name){
   const d=ST.data[name];if(!d)return;
   document.getElementById('det-placeholder').style.display='none';
@@ -685,23 +875,20 @@ function showDetail(name){
   document.getElementById('det-rate-fill').style.cssText=`width:${d.rate}%;background:${c}`;
   document.getElementById('det-rate-val').textContent=`${d.rate.toFixed(1)}%`;
   document.getElementById('det-cands').innerHTML=(d.cands||[]).map((c2,i)=>`
-    <div class="dc">
-      <div class="dc-row">
-        <span style="color:${i===0?'var(--text)':'var(--sub)'};font-weight:${i===0?700:400}">${c2.name} <span style="color:${pc(c2.party)};font-size:10px">${ps(c2.party)}</span></span>
-        <span style="font-weight:700;color:${pc(c2.party)}">${c2.pct}%</span>
-      </div>
-      <div class="dc-bar"><div class="dc-fill" style="width:${c2.pct}%;background:${pc(c2.party)};opacity:${i===0?1:.4}"></div></div>
-      <div class="dc-votes">${fmt(c2.votes)}표</div>
-    </div>`).join('');
+    <div class="dc"><div class="dc-row">
+      <span style="color:${i===0?'var(--text)':'var(--sub)'};font-weight:${i===0?700:400}">${c2.name} <span style="color:${pc(c2.party)};font-size:10px">${ps(c2.party)}</span></span>
+      <span style="font-weight:700;color:${pc(c2.party)}">${c2.pct}%</span>
+    </div><div class="dc-bar"><div class="dc-fill" style="width:${c2.pct}%;background:${pc(c2.party)};opacity:${i===0?1:.4}"></div></div>
+    <div class="dc-votes">${fmt(c2.votes)}표</div></div>`).join('');
 }
 function clearDetail(){
   document.getElementById('det-placeholder').style.display='block';
   document.getElementById('det-content').style.display='none';
 }
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  SUMMARY BAR
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 function renderSummaryBar(){
   const valid=SIDO_ALL.filter(s=>ST.data[s]);
   const counts={};
@@ -709,31 +896,21 @@ function renderSummaryBar(){
   const total=valid.length;
   const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   document.getElementById('sb-total-label').textContent=`광역단체장 ${total}석`;
-  document.getElementById('seat-bar').innerHTML=sorted.map(([p,n])=>
-    `<div class="seat-seg" style="width:${n/total*100}%;background:${pc(p)}"></div>`).join('');
-  document.getElementById('party-chips').innerHTML=sorted.map(([p,n])=>
-    `<div class="pchip"><div class="pdot" style="background:${pc(p)}"></div><span class="pcnt" style="color:${pc(p)}">${n}</span><span class="pname">${ps(p)}</span></div>`).join('');
+  document.getElementById('seat-bar').innerHTML=sorted.map(([p,n])=>`<div class="seat-seg" style="width:${n/total*100}%;background:${pc(p)}"></div>`).join('');
+  document.getElementById('party-chips').innerHTML=sorted.map(([p,n])=>`<div class="pchip"><div class="pdot" style="background:${pc(p)}"></div><span class="pcnt" style="color:${pc(p)}">${n}</span><span class="pname">${ps(p)}</span></div>`).join('');
   const avg=valid.reduce((s,k)=>s+(ST.data[k]?.rate||0),0)/valid.length;
   document.getElementById('avg-rate-val').textContent=avg.toFixed(1)+'%';
 }
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  SIDO LIST
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 function renderList(){
   document.getElementById('sido-list').innerHTML=SIDO_ALL.map(name=>{
     const d=ST.data[name];
-    if(!d)return `<div class="srow" style="opacity:.2;pointer-events:none"><div class="sdot" style="background:#333"></div><div class="sname">${shortSido(name)}</div><div class="sparty" style="color:var(--dim)">-</div></div>`;
+    if(!d)return`<div class="srow" style="opacity:.2;pointer-events:none"><div class="sdot" style="background:#333"></div><div class="sname">${shortSido(name)}</div><div class="sparty" style="color:var(--dim)">-</div></div>`;
     const c=pc(d.winner);
-    return `<div class="srow" id="row-${name}" onclick="drillDown('${name}')">
-      <div class="sdot" style="background:${c}"></div>
-      <div class="sname">${shortSido(name)}</div>
-      <div class="sparty" style="color:${c}">${ps(d.winner)}</div>
-      <div class="srate-wrap">
-        <div class="srate-num">${d.rate.toFixed(0)}%</div>
-        <div class="srate-bar"><div class="srate-fill" style="width:${d.rate}%;background:${c};opacity:.5"></div></div>
-      </div>
-    </div>`;
+    return`<div class="srow" id="row-${name}" onclick="drillDown('${name}')"><div class="sdot" style="background:${c}"></div><div class="sname">${shortSido(name)}</div><div class="sparty" style="color:${c}">${ps(d.winner)}</div><div class="srate-wrap"><div class="srate-num">${d.rate.toFixed(0)}%</div><div class="srate-bar"><div class="srate-fill" style="width:${d.rate}%;background:${c};opacity:.5"></div></div></div></div>`;
   }).join('');
 }
 function highlightListItem(name){
@@ -742,29 +919,105 @@ function highlightListItem(name){
   if(e){e.classList.add('active');e.scrollIntoView({block:'nearest'});}
 }
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  LEGEND
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 function renderLegend(){
-  if(ST.selectedSido){document.getElementById('legend').style.display='none';return;}
   const counts={};
   SIDO_ALL.filter(s=>ST.data[s]).forEach(s=>{const w=ST.data[s].winner;counts[w]=(counts[w]||0)+1;});
-  const leg=document.getElementById('legend');
-  leg.style.display='block';
-  leg.innerHTML=Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([p])=>
-    `<div class="leg-row"><div class="leg-dot" style="background:${pc(p)}"></div><span class="leg-lbl">${PARTY_DB[p]?.short??p}</span></div>`).join('');
+  document.getElementById('legend').innerHTML=Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([p])=>`<div class="leg-row"><div class="leg-dot" style="background:${pc(p)}"></div><span class="leg-lbl">${PARTY_DB[p]?.short??p}</span></div>`).join('');
 }
 
-// ═══════════════════════════════════
-//  LIVE (2026 전용)
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
+//  PNG EXPORT
+// ═══════════════════════════════════════
+function doExport(includeLabels){
+  const svgEl=document.getElementById('map-svg');
+  const W=svgEl.clientWidth*2,H=svgEl.clientHeight*2;
+
+  // SVG 클론 (투명 배경)
+  const clone=svgEl.cloneNode(true);
+  clone.setAttribute('width',W);clone.setAttribute('height',H);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  clone.style.background='transparent';
+
+  // 레이블 제거 옵션
+  if(!includeLabels){
+    clone.querySelectorAll('.sido-label,.sgg-label').forEach(e=>e.remove());
+  } else {
+    // 시스템 폰트로 교체 (캔버스 렌더링 호환)
+    clone.querySelectorAll('text').forEach(t=>{t.setAttribute('font-family','Arial,sans-serif');});
+  }
+
+  const svgStr=new XMLSerializer().serializeToString(clone);
+  const svgBlob=new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(svgBlob);
+  const img=new Image();
+  img.onload=()=>{
+    const canvas=document.createElement('canvas');
+    canvas.width=W;canvas.height=H;
+    const ctx=canvas.getContext('2d');
+    // 배경 없음 (투명)
+    ctx.drawImage(img,0,0,W,H);
+    const link=document.createElement('a');
+    const el=curEl();
+    link.download=`election_${el.year}_${ST.selectedSido||'전국'}.png`;
+    link.href=canvas.toDataURL('image/png');
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  img.onerror=()=>{
+    // Safari fallback: SVG 직접 다운로드
+    const link=document.createElement('a');
+    link.download=`election_${curEl().year}.svg`;
+    link.href=url;link.click();
+  };
+  img.src=url;
+}
+function exportPNG(){doExport(false);}
+function exportPNGWithLabels(){doExport(true);}
+
+// ═══════════════════════════════════════
+//  ELECTION TABS
+// ═══════════════════════════════════════
+function renderTabs(){
+  document.getElementById('election-tabs').innerHTML=ELECTIONS.map(e=>{
+    const active=e.sgId===ST.currentSgId?'active':'';
+    const badge=e.status==='upcoming'?`<span class="tab-badge upcoming">예정</span>`:`<span class="tab-badge done">확정</span>`;
+    return`<div class="etab ${active}" onclick="switchElection('${e.sgId}')"><span class="tab-year">${e.year}</span><span class="tab-num">${e.round}</span>${badge}</div>`;
+  }).join('');
+}
+async function switchElection(sgId){
+  if(ST.isLive)toggleLive();
+  stopPolling();
+  ST.currentSgId=sgId;ST.selectedSido=null;ST.hoveredName=null;
+  const el=curEl();
+  const builtin=HISTORICAL[sgId];
+  if(builtin){ST.data=JSON.parse(JSON.stringify(builtin));ST.dataSource=el.status==='upcoming'?'mock':'builtin';}
+  renderTabs();updateHeader();clearDetail();
+  if(ST.geoLoaded)renderAll();
+}
+function updateHeader(){
+  const el=curEl();
+  document.getElementById('hd-year').textContent=`${el.year} 개표현황`;
+  document.getElementById('header-sub').textContent=`${el.round} · ${el.date} · 광역단체장(시·도지사)`;
+  document.getElementById('btn-live').style.display=isUpcoming()?'block':'none';
+  document.getElementById('btn-fetch').style.display=(!isUpcoming()&&ST.apiKey&&ST.proxyUrl)?'block':'none';
+  const b=document.getElementById('data-src-badge');
+  b.className=ST.dataSource;
+  b.textContent=ST.dataSource==='builtin'?'내장 확정 데이터':ST.dataSource==='api'?'선관위 API':'MOCK 데이터';
+}
+
+// ═══════════════════════════════════════
+//  LIVE / POLLING
+// ═══════════════════════════════════════
 function toggleLive(){
   if(!isUpcoming())return;
   ST.isLive=!ST.isLive;
   const btn=document.getElementById('btn-live');
   document.getElementById('live-badge').classList.toggle('on',ST.isLive);
   btn.classList.toggle('live-on',ST.isLive);
-  btn.textContent=ST.isLive?'■ 중지':'▶ 실시간 시작';
+  btn.textContent=ST.isLive?'■ 중지':'▶ 실시간';
   if(ST.isLive){poll();ST.pollTimer=setInterval(poll,ST.pollSec*1000);}else stopPolling();
 }
 function stopPolling(){if(ST.pollTimer){clearInterval(ST.pollTimer);ST.pollTimer=null;}}
@@ -776,19 +1029,16 @@ async function poll(){
   }else await fetchAllSidoAPI(ST.currentSgId);
 }
 
-// ═══════════════════════════════════
-//  HISTORICAL API FETCH
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
+//  ELECTION API (선관위)
+// ═══════════════════════════════════════
 async function fetchHistorical(){
   if(!ST.apiKey||!ST.proxyUrl){alert('설정에서 API Key와 프록시 URL을 입력하세요');openSettings();return;}
   const btn=document.getElementById('btn-fetch');
   btn.textContent='불러오는 중...';btn.disabled=true;
-  try{
-    await fetchAllSidoAPI(ST.currentSgId);
-    ST.dataSource='api';updateHeader();
-  }finally{btn.textContent='↻ API 불러오기';btn.disabled=false;}
+  try{await fetchAllSidoAPI(ST.currentSgId);ST.dataSource='api';updateHeader();}
+  finally{btn.textContent='↻ API';btn.disabled=false;}
 }
-
 async function fetchAllSidoAPI(sgId){
   const errEl=document.getElementById('err-msg');errEl.classList.remove('show');
   if(!ST.apiKey||!ST.proxyUrl){errEl.textContent='API Key/프록시 없음';errEl.classList.add('show');return;}
@@ -801,12 +1051,9 @@ async function fetchAllSidoAPI(sgId){
   }
   if(ok)renderAll();
 }
-
 async function fetchOneSido(sgId,sidoName){
-  const apiUrl=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
-    +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=3`
-    +`&sdName=${encodeURIComponent(sidoName)}&numOfRows=50&pageNo=1&resultType=json`;
-  const res=await fetch(ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(apiUrl)}`);
+  const url=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=3&sdName=${encodeURIComponent(sidoName)}&numOfRows=50&pageNo=1&resultType=json`;
+  const res=await fetch(ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(url)}`);
   if(!res.ok)throw new Error(`HTTP ${res.status}`);
   const json=await res.json();
   const items=json?.response?.body?.items?.item??json?.body?.items?.item;
@@ -814,8 +1061,7 @@ async function fetchOneSido(sgId,sidoName){
   const arr=Array.isArray(items)?items:[items];
   if(!arr.length)return null;
   const row=arr.find(it=>!it.wiwName||it.wiwName===sidoName)||arr[0];
-  const cands=[];
-  const tv=parseInt(row.yutusu||row.tusu||0);
+  const cands=[];const tv=parseInt(row.yutusu||row.tusu||0);
   for(let i=1;i<=50;i++){
     const idx=String(i).padStart(2,'0');
     const party=row[`jd${idx}`],name=row[`hbj${idx}`],votes=parseInt(row[`dugsu${idx}`]||0);
@@ -826,23 +1072,37 @@ async function fetchOneSido(sgId,sidoName){
   return{winner:cands[0]?.party||'미확정',rate:parseFloat(row.rateOcr||row.turnout||100),cands};
 }
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  SETTINGS
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 function openSettings(){
+  ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
+  ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
   ST.apiKey=localStorage.getItem('el_apikey')||'';
   ST.proxyUrl=localStorage.getItem('el_proxy')||'';
-  document.getElementById('input-apikey').value=ST.apiKey;
+  document.getElementById('input-sgis-key').value=ST.sgisKey;
+  document.getElementById('input-sgis-secret').value=ST.sgisSecret;
   document.getElementById('input-proxy').value=ST.proxyUrl;
+  document.getElementById('input-apikey').value=ST.apiKey;
   setMode(ST.mode,false);setPoll(ST.pollSec,false);
+  // 캐시 상태
+  try{
+    const c=JSON.parse(localStorage.getItem('el_geo_cache')||'null');
+    if(c?.ts){const age=Math.round((Date.now()-c.ts)/3600000);document.getElementById('cache-status').textContent=`캐시: ${age}시간 전 (시도 ${c.sido?.features?.length||0}개, 시군구 ${c.sigungu?.features?.length||0}개)`;}
+    else document.getElementById('cache-status').textContent='캐시 없음 — CDN 사용 중';
+  }catch{document.getElementById('cache-status').textContent='캐시 없음';}
   document.getElementById('settings-overlay').classList.add('on');
 }
 function closeSettings(){document.getElementById('settings-overlay').classList.remove('on');}
 function saveSettings(){
-  const key=document.getElementById('input-apikey').value.trim();
+  const sk=document.getElementById('input-sgis-key').value.trim();
+  const ss=document.getElementById('input-sgis-secret').value.trim();
   const proxy=document.getElementById('input-proxy').value.trim();
-  if(key){ST.apiKey=key;localStorage.setItem('el_apikey',key);}
+  const apikey=document.getElementById('input-apikey').value.trim();
+  if(sk){ST.sgisKey=sk;localStorage.setItem('el_sgis_key',sk);}
+  if(ss){ST.sgisSecret=ss;localStorage.setItem('el_sgis_secret',ss);}
   if(proxy){ST.proxyUrl=proxy;localStorage.setItem('el_proxy',proxy);}
+  if(apikey){ST.apiKey=apikey;localStorage.setItem('el_apikey',apikey);}
   localStorage.setItem('el_mode',ST.mode);localStorage.setItem('el_poll',ST.pollSec);
   updateHeader();closeSettings();
   if(ST.isLive){stopPolling();ST.pollTimer=setInterval(poll,ST.pollSec*1000);}
@@ -854,31 +1114,34 @@ function setMode(m,save=true){
   document.getElementById('real-settings').style.display=m==='real'?'block':'none';
 }
 function setPoll(s,save=true){
-  ST.pollSec=s;
-  [10,30,60].forEach(n=>document.getElementById(`poll-${n}`)?.classList.toggle('active',n===s));
+  ST.pollSec=s;[10,30,60].forEach(n=>document.getElementById(`poll-${n}`)?.classList.toggle('active',n===s));
 }
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  CLOCK
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 setInterval(()=>{document.getElementById('time-str').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  RENDER ALL
-// ═══════════════════════════════════
-function renderAll(){renderMap();renderList();renderSummaryBar();if(ST.hoveredName||ST.selectedSido)showDetail(ST.hoveredName||ST.selectedSido);}
+// ═══════════════════════════════════════
+function renderAll(){
+  renderMap();renderList();renderSummaryBar();renderLegend();
+  if(ST.hoveredName||ST.selectedSido)showDetail(ST.hoveredName||ST.selectedSido);
+}
 
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 //  INIT
-// ═══════════════════════════════════
+// ═══════════════════════════════════════
 window.addEventListener('resize',()=>{if(ST.geoLoaded)renderMap();});
 ST.apiKey=localStorage.getItem('el_apikey')||'';
 ST.proxyUrl=localStorage.getItem('el_proxy')||'';
+ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
+ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
 ST.mode=localStorage.getItem('el_mode')||'mock';
 ST.pollSec=parseInt(localStorage.getItem('el_poll')||'30');
-renderTabs();
-updateHeader();
-loadGeo();
+document.getElementById('lbl-toggle-btn').classList.add('active');
+renderTabs();updateHeader();loadGeo();
 </script>
 </body>
 </html>
