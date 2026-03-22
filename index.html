@@ -839,6 +839,7 @@ function initMapLayers(){
     .data(ST.sidoGeo.features).join('path')
     .attr('class','sido-p')
     .attr('d',_path)
+    .attr('fill',d=>_sidoFill(d.properties))   // ← 초기 fill 설정 (데이터 없으면 #111a30)
     .attr('stroke','#04060e').attr('stroke-width',0.7).attr('vector-effect','non-scaling-stroke')
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
@@ -1458,7 +1459,7 @@ async function fetchAllSidoAPI(sgId){
     }finally{
       done++;
       // 부분 업데이트: 성공할 때마다 색상 갱신
-      if(success>0)updateMapColors();
+      if(success>0&&_mapInitialized)updateMapColors();
       errEl.textContent=`${done}/${SIDO_ALL.length} 갱신 중${failed.length?` (실패: ${failed.join(', ')})` :''}`;
       errEl.classList.add('show');
     }
@@ -1473,7 +1474,8 @@ async function fetchAllSidoAPI(sgId){
     ST.dataSource='api';
     updateHeader();
     preprocessSggColors(sgId);
-    renderSummaryBar();renderList();updateMapColors();
+    // renderAll() 로 완전 재렌더 (지도 색상 + 목록 + 요약 모두 갱신)
+    renderAll();
     errEl.textContent=failed.length
       ?`${success}/${SIDO_ALL.length}개 완료, 실패: ${failed.join(', ')}`
       :`✅ ${success}개 시도 선관위 데이터 갱신 완료`;

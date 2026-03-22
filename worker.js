@@ -1,71 +1,81 @@
 /**
- * Cloudflare Worker - 선관위 API CORS 프록시
- * 파일명: worker.js
+ * Cloudflare Worker — CORS 프록시
+ * ─────────────────────────────────
+ * 허용 도메인: 선관위, SGIS(구/신), VWorld
  *
- * 배포 방법:
- * 1. https://workers.cloudflare.com 접속 (무료 계정)
- * 2. "Create a Worker" 클릭
- * 3. 이 코드 전체 붙여넣기 → 저장 → 배포
- * 4. 배포된 URL (예: https://election-proxy.your-name.workers.dev) 을
- *    앱 설정의 "CORS 프록시 URL" 에 입력
+ * 【Cloudflare 에디터 붙여넣기 방법】
+ *   workers.cloudflare.com → 워커 선택 → Edit Code
+ *   → 기존 코드 전부 지우고 이 파일 전체 붙여넣기 → Save and Deploy
  */
 
-export default {
-  async fetch(request, env) {
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    };
+const ALLOWED = [
+  'apis.data.go.kr',       // 선관위 공공데이터포털
+  'sgisapi.mods.go.kr',    // SGIS 국가데이터처 (현행)
+  'sgisapi.kostat.go.kr',  // SGIS 통계청 (구 도메인, 혹시 몰라 유지)
+  'api.vworld.kr',         // VWorld
+];
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
-    }
-
-    const url = new URL(request.url);
-    const targetUrl = url.searchParams.get('url');
-
-    if (!targetUrl) {
-      return new Response(JSON.stringify({ error: 'url 파라미터 필요' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // 보안: apis.data.go.kr 만 허용
-    const allowed = ['apis.data.go.kr', 'sgisapi.kostat.go.kr', 'sgisapi.mods.go.kr', 'api.vworld.kr'];
-    try {
-      const targetHost = new URL(decodeURIComponent(targetUrl)).hostname;
-      if (!allowed.includes(targetHost)) {
-        return new Response(JSON.stringify({ error: '허용되지 않은 도메인' }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    } catch(e) {
-      return new Response(JSON.stringify({ error: '잘못된 URL' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    try {
-      const response = await fetch(decodeURIComponent(targetUrl), {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-      });
-      const text = await response.text();
-      return new Response(text, {
-        status: response.status,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': response.headers.get('Content-Type') || 'application/json',
-        },
-      });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: e.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-  },
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
+
+addEventListener('fetch', event => {
+  event.respondWith(handle(event.request));
+});
+
+async function handle(request) {
+  // CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const raw = searchParams.get('url');
+
+  if (!raw) {
+    return json({ error: 'url 파라미터 필요' }, 400);
+  }
+
+  let decoded, host;
+  try {
+    decoded = decodeURIComponent(raw);
+    host = new URL(decoded).hostname;
+  } catch {
+    return json({ error: '잘못된 URL 형식' }, 400);
+  }
+
+  if (!ALLOWED.includes(host)) {
+    return json({ error: `허용되지 않은 도메인: ${host}` }, 403);
+  }
+
+  try {
+    const res = await fetch(decoded, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; KBS-ElectionMap/1.0)',
+        'Accept': 'application/json, application/geo+json, */*',
+      },
+      cf: { cacheTtl: 30 },  // Cloudflare 엣지 캐시 30초
+    });
+
+    const body = await res.text();
+    return new Response(body, {
+      status: res.status,
+      headers: {
+        ...CORS,
+        'Content-Type': res.headers.get('Content-Type') || 'application/json',
+        'X-Proxy-Status': res.status.toString(),
+      },
+    });
+  } catch (e) {
+    return json({ error: e.message, host }, 502);
+  }
+}
+
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { ...CORS, 'Content-Type': 'application/json' },
+  });
+}
