@@ -1038,54 +1038,55 @@ function renderMap(){
 function _renderSggLayer(g, sidoName){
   g.select('#sgg-layer').remove();
   if(!ST.sigunguGeo)return;
-  const code=SIDO_CODE[sidoName]||'';
-  // SIGUNGU_CD 앞 2자리 = sido 코드 매칭 (가장 직접적이고 확실)
+  const code=String(SIDO_CODE[sidoName]||'');  // 항상 string
+
+  // ── 진단: 실제 데이터 확인 ──────────────────────────────────
+  const first=ST.sigunguGeo.features[0]?.properties||{};
+  console.log('[드릴다운 시작]',sidoName,'| code:',code,
+    '| 총 시군구:',ST.sigunguGeo.features.length,
+    '| 첫번째 feature:', JSON.stringify(first));
+
+  // ── 매칭: 4가지 방법을 모두 시도 ──────────────────────────
   const sggFeatures=ST.sigunguGeo.features.filter(f=>{
     const p=f.properties;
 
-    // ① SIGUNGU_CD 앞 2자리 직접 비교 — 로컬 geo/ 파일의 핵심 매칭
-    const sigunguCd=String(p.SIGUNGU_CD||'');
-    if(code&&sigunguCd.length>=2&&sigunguCd.slice(0,2)===code)return true;
+    // 방법1: SIGUNGU_CD (string/number 양쪽) 앞 2자리
+    const cd=String(p.SIGUNGU_CD||p.SIGUNGU_cd||'');
+    if(cd.length>=2&&cd.substring(0,2)===code)return true;
 
-    // ② sido 필드 (normGeo 주입, '42' 등)
-    if(p.sido&&code&&String(p.sido)===code)return true;
+    // 방법2: code 필드 (normGeo 주입) 앞 2자리
+    const pCode=String(p.code||'');
+    if(pCode.length>=2&&pCode.substring(0,2)===code)return true;
 
-    // ③ sidoName (normGeo 주입, '강원특별자치도' 등)
-    if(p.sidoName&&p.sidoName===sidoName)return true;
+    // 방법3: sido 코드 필드 정확히 일치
+    if(String(p.sido||'')===code)return true;
 
-    // ④ 사전계산 _sidoName
-    if(p._sidoName&&p._sidoName===sidoName)return true;
-
-    // ⑤ SIDO_NM 직접 (VWorld sig_kor_nm, SGIS adm_nm 계열)
-    const sn=String(p.SIDO_NM||p.NM_SIDO||p.sido_nm||'').trim();
+    // 방법4: 이름 기반 (SIDO_NM, sidoName, _sidoName)
+    const sn=String(p.SIDO_NM||p.sidoName||p._sidoName||p.NM_SIDO||'').trim();
     if(sn&&normName(sn)===sidoName)return true;
 
-    // ⑥ full_nm 앞부분 (VWorld: "서울특별시 종로구")
+    // 방법5: full_nm, NAME_1 (VWorld/GADM)
     const full=String(p.full_nm||'').trim();
     if(full&&full.startsWith(sidoName))return true;
-
-    // ⑦ code 필드 앞 2자리 (normGeo가 주입한 전체 코드)
-    const pCode=String(p.code||'');
-    if(code&&pCode.length>=2&&pCode.slice(0,2)===code)return true;
-
-    // ⑧ NAME_1 (GADM CDN 영문)
     const n1=String(p.NAME_1||'').trim();
     if(n1&&normName(n1)===sidoName)return true;
 
     return false;
   });
 
-  console.log('[드릴다운]',sidoName,'시군구',sggFeatures.length,'개, code:',code);
+  console.log('[드릴다운 결과]',sidoName,'→',sggFeatures.length,'개 매칭',
+    sggFeatures.length>0?'✓':'✗ 매칭 실패');
+
   if(!sggFeatures.length){
-    // 진단 로그: 첫 번째 feature 전체 properties 출력
-    const sample0=ST.sigunguGeo.features[0]?.properties||{};
-    console.warn('[드릴다운] 매칭 실패! 첫번째 feature:', JSON.stringify(sample0));
-    console.warn('[드릴다운] 전체 keys:', Object.keys(sample0));
-    // 랜덤 5개 SIGUNGU_CD 출력
-    const sample5=ST.sigunguGeo.features.slice(0,5).map(f=>f.properties.SIGUNGU_CD||f.properties.code||'?');
-    console.warn('[드릴다운] 앞 5개 SIGUNGU_CD:', sample5, '| 찾는 코드:', code);
+    // 어떤 값들이 있는지 확인
+    const uniqCodes=[...new Set(ST.sigunguGeo.features.slice(0,10)
+      .map(f=>String(f.properties.SIGUNGU_CD||f.properties.code||'').substring(0,2)))];
+    console.error('[매칭실패] 앞 10개의 시도코드(앞2자리):', uniqCodes, '| 찾는 코드:', code,
+      '| SIDO_ALL:', Object.entries(SIDO_CODE).find(([,v])=>v===code));
     const listEl=document.getElementById('sido-list');
-    if(listEl)listEl.innerHTML=`<div style="padding:10px 8px;font-size:11px;color:var(--dim)">시군구 경계 없음 (code:${code})<br><span style="color:#6a9af5;font-size:10px">콘솔에서 진단 로그 확인</span></div>`;
+    if(listEl)listEl.innerHTML=`<div style="padding:10px 8px;font-size:11px;color:#f4924a">
+      시군구 매칭 실패 (code:${code})<br>
+      <span style="color:#6a9af5;font-size:10px">콘솔(F12)에서 [드릴다운] 로그 확인</span></div>`;
     return;
   }
 
