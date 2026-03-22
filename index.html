@@ -223,33 +223,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 <div id="settings-overlay" onclick="if(event.target===this)closeSettings()">
   <div id="settings-modal">
     <div class="m-title">⚙ 설정</div>
-    <div class="m-sec">🗺 지도 데이터 (VWorld 권장)</div>
-    <div class="info-box">
-      <b>VWorld</b> — 국토교통부 공식 API. 최신 행정경계(세종시·신대구·강원특별자치도·전북특별자치도 포함).<br>
-      CORS 프록시 없이도 <b>GitHub Pages 도메인</b>을 VWorld에 등록하면 직접 호출 가능 (권장).
-    </div>
-    <div class="m-group">
-      <label class="m-lbl">VWorld API Key <span style="color:#6aaa6a;font-size:10px">★ 권장</span></label>
-      <input class="m-input" id="in-vworld-key" placeholder="https://www.vworld.kr/dev/v4api.do 에서 발급">
-      <div class="m-hint">발급 시 활용 URL에 <b>GitHub Pages 주소</b>(https://mjpkbs.github.io)를 등록하면<br>프록시 없이 브라우저에서 직접 호출 가능</div>
-    </div>
-    <div class="m-group">
-      <label class="m-lbl">CORS 프록시 URL <span style="color:var(--sub);font-size:10px">(VWorld 도메인 미등록 시 필요)</span></label>
-      <input class="m-input" id="in-proxy" placeholder="https://your-worker.workers.dev">
-      <div class="m-hint">SGIS API 프록시로 사용 · 선관위 API는 프록시 없이도 직접 호출 가능 · VWorld는 JSONP 방식으로 프록시 불필요</div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-      <button class="btn-sm" id="btn-vworld" onclick="loadVWorldGeo()">🗺 VWorld 지도 갱신</button>
-      <button class="btn-danger" onclick="clearGeoCache()">캐시 삭제</button>
-      <div id="vw-status" style="font-size:11px;color:var(--dim)"></div>
-    </div>
-    <div class="m-sec" style="margin-top:10px">🗺 SGIS (대안)</div>
-    <div class="m-group"><label class="m-lbl">SGIS Consumer Key</label><input class="m-input" id="in-sgis-key" placeholder="https://sgis.kostat.go.kr/developer 발급"></div>
-    <div class="m-group"><label class="m-lbl">SGIS Consumer Secret</label><input class="m-input" type="password" id="in-sgis-sec" placeholder="Consumer Secret"></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn-sm" onclick="fetchSGISGeo()">🗺 SGIS 지도 갱신</button>
-      <div id="cache-st" style="font-size:11px;color:var(--dim)"></div>
-    </div>
     <div class="m-sec">📡 선거 결과 API</div>
     <div class="m-group"><label class="m-lbl">2026 데이터 모드</label>
       <div class="tog-row">
@@ -465,8 +438,7 @@ let ST={
   dataSource:'mock',
   showLabels:true,
   selectedSido:null,
-  mode:'mock',apiKey:'',proxyUrl:'',sgisKey:'',sgisSecret:'',vworldKey:'',
-  pollSec:30,isLive:false,pollTimer:null,
+  mode:'mock',apiKey:'',proxyUrl:'',sgisKey:'',sgisSecret:'',pollSec:30,isLive:false,pollTimer:null,
 };
 const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
@@ -484,266 +456,6 @@ const GEO_SRCS=[
   {sido:'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-provinces-geo.json',sigungu:'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-municipalities-geo.json'},
 ];
 async function tryFetch(url){try{const r=await fetch(url);if(r.ok)return await r.json();}catch{}return null;}
-
-// ─── VWorld 2D Data API (JSONP 방식 — CORS 프록시 불필요) ────
-// VWorld 공식 권장: CORS 오류 발생 시 dataType=JSONP 사용
-// 시도: LT_C_ADSIDO_INFO / 시군구: LT_C_ADSIGG_INFO
-async function fetchVWorldLayer(layerName, size=1000){
-  const key=ST.vworldKey;
-  if(!key)throw new Error('VWorld API Key 없음');
-  const proxy=ST.proxyUrl;
-
-  const baseUrl=`https://api.vworld.kr/req/data?service=data&request=GetFeature`+
-    `&data=${layerName}&crs=EPSG:4326&format=json&size=${size}&page=1`+
-    `&key=${encodeURIComponent(key)}&domain=${encodeURIComponent(location.origin)}`;
-
-  // 1순위: 프록시가 있으면 프록시로 JSON 직접 호출 (가장 안정적)
-  if(proxy){
-    const r=await fetch(proxy.replace(/\/$/,'')+`?url=${encodeURIComponent(baseUrl)}`);
-    if(!r.ok)throw new Error(`VWorld HTTP ${r.status}`);
-    const json=await r.json();
-    if(json?.response?.status!=='OK')throw new Error(`VWorld: ${json?.response?.status||'오류'}`);
-    return json.response.result.featureCollection;
-  }
-
-  // 2순위: 프록시 없으면 JSONP 시도
-  return new Promise((resolve, reject)=>{
-    const cbName='_vwCb_'+layerName.replace(/[^a-z]/gi,'_')+'_'+Date.now();
-    const timer=setTimeout(()=>{cleanup();reject(new Error('VWorld 응답 시간 초과 (10초) — ⚙ 설정에서 프록시 URL을 입력하면 더 빠릅니다'));},10000);
-    function cleanup(){clearTimeout(timer);delete window[cbName];document.getElementById(cbName)?.remove();}
-    window[cbName]=function(json){
-      cleanup();
-      if(json?.response?.status!=='OK'){reject(new Error('VWorld: '+(json?.response?.status||'오류')));return;}
-      resolve(json.response.result.featureCollection);
-    };
-    const url=baseUrl+`&callback=${cbName}`;
-    const script=document.createElement('script');
-    script.id=cbName;script.src=url;
-    script.onerror=()=>{cleanup();reject(new Error('VWorld JSONP 로드 실패'));};
-    document.head.appendChild(script);
-  });
-}
-
-async function loadVWorldGeo(){
-  const st=document.getElementById('vw-status');
-  const btn=document.getElementById('btn-vworld');
-  try{
-    if(st)st.textContent='VWorld 시도 로딩 중...';
-    if(btn){btn.disabled=true;btn.textContent='로딩...';}
-    const sidoFC=await fetchVWorldLayer('LT_C_ADSIDO_INFO',20);
-    if(st)st.textContent='VWorld 시군구 로딩 중... (잠시 대기)';
-    const sggFC=await fetchVWorldLayer('LT_C_ADSIGG_INFO',1000);
-    const sidoGeo=normGeo(sidoFC);
-    const sigunguGeo=normGeo(sggFC);
-    // sido 코드/이름 추가 주입
-    sigunguGeo.features.forEach(f=>{
-      const cd=String(f.properties.SIGUNGU_CD||f.properties.sig_cd||f.properties.code||f.properties.CD_SIGUNGU||'');
-      if(cd&&cd.length>=2)f.properties.sido=cd.slice(0,2);
-      const fn=f.properties.full_nm||'';
-      if(fn&&!f.properties.sidoName){
-        const sFound=SIDO_ALL.find(s=>fn.startsWith(s));
-        if(sFound)f.properties.sidoName=sFound;
-      }
-    });
-    try{localStorage.setItem('el_geo_cache',JSON.stringify({sido:sidoGeo,sigungu:sigunguGeo,ts:Date.now(),src:'vworld'}));}
-    catch(e){console.warn('캐시 저장 실패',e.message);}
-    ST.sidoGeo=sidoGeo;ST.sigunguGeo=sigunguGeo;ST.geoLoaded=true;
-    if(st)st.textContent=`✅ VWorld ${new Date().toLocaleString('ko-KR')} 갱신`;
-    document.getElementById('loading-wrap').style.display='none';
-    preprocessSggColors(ST.currentSgId);  // 색상 사전계산 보장
-    renderAll();
-  }catch(e){
-    if(st)st.textContent=`❌ ${e.message}`;
-    throw e;  // loadGeo의 catch로 전파
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent='🗺 VWorld 지도 갱신';}
-  }
-}
-// 시도 이름 후보를 props에서 모두 추출하고 SIDO_ALL과 매칭
-function extractSidoName(p){
-  // 가능한 모든 시도명 필드명 시도
-  const raw=[
-    p.SIDO_NM, p.NM_SIDO, p.ctp_kor_nm, p.CTP_KOR_NM, p.SIDO, p.sido_nm,
-    p.NAME_1, p.name, p.adm_nm, p.KOR_NM
-  ].filter(Boolean).map(v=>String(v).trim());
-
-  for(const v of raw){
-    const nm=normName(v);
-    if(SIDO_ALL.includes(nm))return nm;
-    // 부분 일치 (짧은 별칭 → 전체 이름)
-    const m=SIDO_ALL.find(s=>s.includes(nm)||nm.includes(s.replace(/특별시$|광역시$|특별자치시$|특별자치도$|도$/,'')));
-    if(m)return m;
-  }
-  return null;
-}
-
-// 시군구 이름을 props에서 추출 (시도 접두어 제거 포함)
-function extractSggName(p){
-  const raw=[
-    p.SIGUNGU_NM, p.NM_SIGUNGU, p.sig_kor_nm, p.SIG_KOR_NM, p.SGG, p.sgg_nm,
-    p.NAME_2, p.name, p.adm_nm
-  ].filter(Boolean).map(v=>String(v).trim());
-
-  for(const v of raw){
-    if(!v)continue;
-    let nm=normSgg(v);
-    // "서울특별시 종로구" 형태면 시도명 제거
-    for(const s of SIDO_ALL){
-      if(nm.startsWith(s+' ')){nm=nm.slice(s.length+1);break;}
-      const short=s.replace(/특별시$|광역시$|특별자치시$|특별자치도$/,'');
-      if(nm.startsWith(short+' ')){nm=nm.slice(short.length+1);break;}
-    }
-    if(nm)return nm;
-  }
-  return '';
-}
-
-function normGeo(geo){
-  if(!geo||!geo.features)return geo;
-
-  // 첫 번째 feature로 파일 타입 감지 (디버그용 로그)
-  const sample=geo.features[0]?.properties||{};
-  console.log('[normGeo] 샘플 properties 키:', Object.keys(sample).slice(0,10));
-  console.log('[normGeo] 샘플 값 일부:', JSON.stringify(sample).slice(0,200));
-
-  return{...geo,features:geo.features.map(f=>{
-    const p=f.properties;
-    // 시도 파일 판단 (SIDO_NM 로컬 파일 최우선)
-    const isSidoFile=!!(p.SIDO_NM||p.SIDO_CD||p.NM_SIDO||p.ctp_kor_nm||p.CTP_KOR_NM||p.ctprvn_cd);
-    // 시군구 파일 판단 (SIGUNGU_NM 로컬 파일 최우선)
-    const isSggFile=!!(p.SIGUNGU_NM||p.SIGUNGU_CD||p.NM_SIGUNGU||p.sig_kor_nm||p.SIG_KOR_NM||p.sig_cd);
-
-    let nm='';
-    if(isSidoFile&&!isSggFile){
-      // 시도 파일
-      nm=extractSidoName(p)||normName(normSgg(getGeoName(p)));
-    }else if(isSggFile){
-      // 시군구 파일 — sido/sidoName을 return 객체에 명시적으로 포함
-      nm=extractSggName(p)||normSgg(getGeoName(p));
-      const sigCd=String(p.SIGUNGU_CD||p.sig_cd||p.SIG_CD||p.CD_SIGUNGU||getGeoCode(p)||'');
-
-      // sido 코드 (앞 2자리)
-      const _sido=sigCd.length>=2?sigCd.slice(0,2):(p.sido||'');
-
-      // sidoName 계산 — SIGUNGU_FILE_CODE(구형) → SIDO_CODE 역방향(현행) 순으로 시도
-      const _codeToSido=Object.fromEntries(Object.entries(SIDO_CODE).map(([k,v])=>[v,k]));
-      const _sidoName=
-        (p.SIDO_NM?normName(String(p.SIDO_NM).trim()):null)||
-        (p.NM_SIDO?normName(String(p.NM_SIDO).trim()):null)||
-        SIGUNGU_FILE_CODE[_sido]||   // 구형 코드 체계 (21=부산 등)
-        _codeToSido[_sido]||          // 현행 코드 체계 (26=부산 등)
-        null;
-
-      // return에서 명시적으로 추가
-      const code=getGeoCode(p);
-      return{...f,properties:{...p,name:nm,code,sido:_sido,sidoName:_sidoName}};
-
-    }else{
-      // GADM / 알 수 없는 형식 (NAME_1=시도영문, NAME_2=시군구)
-      const hasName1=!!(p.NAME_1||p.name_1);
-      if(hasName1){
-        const sidoKr=normName(p.NAME_1||p.name_1||'');
-        nm=normSgg(p.NAME_2||p.name_2||getGeoName(p)||'');
-        const _sido2=SIDO_CODE[sidoKr]||'';
-        const code=getGeoCode(p);
-        return{...f,properties:{...p,name:nm,code,sido:_sido2,sidoName:sidoKr}};
-      }else{
-        nm=extractSidoName(p)||extractSggName(p)||normName(normSgg(getGeoName(p)));
-      }
-    }
-
-    const code=getGeoCode(p);
-    return{...f,properties:{...p,name:nm,code}};
-  })};
-}
-
-// 공통 지도 적용 함수
-function _applyGeo(sidoGeo,sigunguGeo,src){
-  ST.sidoGeo=sidoGeo;ST.sigunguGeo=sigunguGeo;ST.geoLoaded=true;
-  console.log('[GeoJSON] 로드 완료:', src,
-    '| 시도', sidoGeo.features.length,'개',
-    '| 시군구', sigunguGeo.features.length,'개',
-    '| 시군구 샘플 keys:', Object.keys(sigunguGeo.features[0]?.properties||{}).slice(0,8));
-  document.getElementById('loading-wrap').style.display='none';
-  preprocessSggColors(ST.currentSgId);
-  renderAll();
-}
-
-async function loadGeo(){
-  const ltxt=document.getElementById('loading-txt');
-  const lsub=document.getElementById('loading-sub');
-  ltxt.textContent='지도 데이터 로딩 중...';
-
-  function _showErr(tag,msg){
-    const errEl=document.getElementById('err-msg');
-    if(errEl){errEl.textContent=`${tag}: ${msg}`;errEl.classList.add('show');
-      setTimeout(()=>errEl.classList.remove('show'),6000);}
-    if(lsub){lsub.textContent=msg;setTimeout(()=>{if(lsub)lsub.textContent='';},5000);}
-  }
-
-  // ── 1순위: SGIS API (키+프록시 있으면 최신 경계) ─────────────────
-  if(ST.sgisKey&&ST.sgisSecret&&ST.proxyUrl){
-    ltxt.textContent='SGIS API 연결 중...';
-    try{
-      await _loadSgisGeoAuto();
-      return;
-    }catch(e){
-      console.warn('[SGIS] 실패:', e.message);
-      ltxt.textContent='SGIS 실패 → VWorld 시도 중...';
-      _showErr('SGIS',e.message);
-    }
-  }
-
-  // ── 2순위: VWorld API (키 있으면) ────────────────────────────────
-  if(ST.vworldKey){
-    ltxt.textContent='VWorld API 연결 중...';
-    try{
-      await loadVWorldGeo();
-      return;
-    }catch(e){
-      const reason=_vworldErrorReason(e);
-      console.warn('[VWorld] 실패:', e.message,'|',reason);
-      ltxt.textContent='VWorld 실패 → 로컬 파일 사용';
-      _showErr('VWorld',reason);
-    }
-  }
-
-  // ── 3순위: 로컬 geo/ 파일 ────────────────────────────────────────
-  const localSrcs=[
-    {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
-    {sido:'./geo/sido.json',   sigungu:'./geo/sigungu.json'},
-  ];
-  for(const src of localSrcs){
-    ltxt.textContent=`로컬 파일 로딩: ${src.sigungu.split('/').pop()}`;
-    const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
-    if(s&&sg){_applyGeo(normGeo(s),normGeo(sg),src.sido);return;}
-  }
-
-  // ── 4순위: CDN fallback (GADM) ────────────────────────────────────
-  const cdnSrcs=GEO_SRCS.filter(s=>s.sido.startsWith('http'));
-  for(const src of cdnSrcs){
-    ltxt.textContent=`CDN 로딩: ${src.sido.split('/').pop()}`;
-    const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
-    if(s&&sg){_applyGeo(normGeo(s),normGeo(sg),src.sido);return;}
-  }
-
-  ltxt.textContent='지도 로딩 실패';
-  if(lsub)lsub.textContent='설정에서 VWorld 키를 입력하거나 geo/ 폴더에 파일을 넣어 주세요';
-}
-
-// VWorld 에러 원인을 사용자 친화적 문장으로 변환
-function _vworldErrorReason(e){
-  const m=e.message||'';
-  if(m.includes('API Key 없음'))return 'API 키가 비어 있음';
-  if(m.includes('HTTP 401')||m.includes('401'))return '인증 실패 — API 키 확인 필요';
-  if(m.includes('HTTP 403')||m.includes('403'))return '접근 거부 — 활용 URL 등록 필요 (vworld.kr 개발자센터)';
-  if(m.includes('HTTP 429')||m.includes('429'))return '요청 한도 초과 — 잠시 후 다시 시도';
-  if(m.includes('HTTP 5'))return 'VWorld 서버 오류 — 잠시 후 재시도';
-  if(m.includes('Failed to fetch')||m.includes('NetworkError'))return 'CORS 오류 — ⚙설정에서 프록시 URL을 입력하거나 vworld.kr에 https://mjpkbs.github.io 도메인 등록 필요';
-  if(m.includes('CORS'))return 'CORS 오류 — 프록시 URL 설정 또는 vworld.kr에 도메인 등록 필요';
-  if(m.includes('OK')||m.includes('status'))return `API 응답 오류 (${m})`;
-  return m||'알 수 없는 오류';
-}
 
 // SGIS 자동 로드 (loadGeo 내부용 — 설정 버튼과 별개)
 async function _loadSgisGeoAuto(){
@@ -787,6 +499,75 @@ function utmk2wgs(x,y){const a=6378137,e2=0.00669438002290,dx=1000000,dy=2000000
 function convC(c){if(!c)return c;if(typeof c[0]==='number'){const r=utmk2wgs(c[0],c[1]);return r;}return c.map(convC);}
 function needConv(geo){try{let c=geo.features[0]?.geometry?.coordinates;while(Array.isArray(c[0]))c=c[0];return Math.abs(c[0])>500;}catch{return false;}}
 function convGeo(geo){if(!needConv(geo))return geo;return{...geo,features:geo.features.map(f=>({...f,geometry:{...f.geometry,coordinates:convC(f.geometry.coordinates)}}))};}
+
+// GeoJSON 속성 정규화 (모든 소스 통일)
+function normGeo(geo){
+  if(!geo||!geo.features)return geo;
+  const sample=geo.features[0]?.properties||{};
+  console.log('[normGeo] 샘플 properties 키:',Object.keys(sample).slice(0,10));
+  console.log('[normGeo] 샘플 값 일부:',JSON.stringify(sample).slice(0,200));
+
+  const _codeToSido=Object.fromEntries(Object.entries(SIDO_CODE).map(([k,v])=>[v,k]));
+
+  return{...geo,features:geo.features.map(f=>{
+    const p=f.properties;
+
+    // ── SGIS API 형식: adm_cd(2자리=시도, 5자리=시군구) + adm_nm ──
+    const admCd=String(p.adm_cd||'').trim();
+    const admNm=String(p.adm_nm||'').trim();
+    if(admCd&&admNm){
+      if(admCd.length<=2){
+        // SGIS 시도 feature
+        const nm=normName(admNm)||admNm;
+        return{...f,properties:{...p,name:nm,code:admCd}};
+      }else if(admCd.length===5){
+        // SGIS 시군구 feature
+        // p.sido = _loadSgisGeoAuto에서 주입한 시도코드 (2자리)
+        const _sido=String(p.sido||admCd.slice(0,2));
+        const _sidoName=
+          SIGUNGU_FILE_CODE[_sido]||   // 구형 코드 (21=부산 등)
+          _codeToSido[_sido]||          // 현행 코드 (42=강원 등 SGIS)
+          null;
+        return{...f,properties:{...p,name:admNm,code:admCd,sido:_sido,sidoName:_sidoName}};
+      }
+    }
+
+    // ── 로컬 geo/ 파일 (SIDO_NM / SIGUNGU_NM) ──
+    const isSidoFile=!!(p.SIDO_NM||p.SIDO_CD||p.NM_SIDO||p.ctp_kor_nm||p.CTP_KOR_NM||p.ctprvn_cd);
+    const isSggFile=!!(p.SIGUNGU_NM||p.SIGUNGU_CD||p.NM_SIGUNGU||p.sig_kor_nm||p.SIG_KOR_NM||p.sig_cd);
+
+    let nm='';
+    if(isSidoFile&&!isSggFile){
+      nm=extractSidoName(p)||normName(normSgg(getGeoName(p)));
+    }else if(isSggFile){
+      nm=extractSggName(p)||normSgg(getGeoName(p));
+      const sigCd=String(p.SIGUNGU_CD||p.sig_cd||p.SIG_CD||p.CD_SIGUNGU||getGeoCode(p)||'');
+      const _sido=sigCd.length>=2?sigCd.slice(0,2):(p.sido||'');
+      const _sidoName=
+        (p.SIDO_NM?normName(String(p.SIDO_NM).trim()):null)||
+        (p.NM_SIDO?normName(String(p.NM_SIDO).trim()):null)||
+        SIGUNGU_FILE_CODE[_sido]||
+        _codeToSido[_sido]||
+        null;
+      const code=getGeoCode(p);
+      return{...f,properties:{...p,name:nm,code,sido:_sido,sidoName:_sidoName}};
+    }else{
+      // GADM / 기타
+      const hasName1=!!(p.NAME_1||p.name_1);
+      if(hasName1){
+        const sidoKr=normName(p.NAME_1||p.name_1||'');
+        nm=normSgg(p.NAME_2||p.name_2||getGeoName(p)||'');
+        const _sido2=SIDO_CODE[sidoKr]||'';
+        const code=getGeoCode(p);
+        return{...f,properties:{...p,name:nm,code,sido:_sido2,sidoName:sidoKr}};
+      }else{
+        nm=extractSidoName(p)||extractSggName(p)||normName(normSgg(getGeoName(p)));
+      }
+    }
+    const code=getGeoCode(p);
+    return{...f,properties:{...p,name:nm,code}};
+  })};
+}
 
 async function fetchSGISGeo(){
   const st=document.getElementById('cache-st');
@@ -1013,11 +794,11 @@ function _renderSggLayer(g, sidoName){
       if(m&&m[0]===sidoName)return true;
     }
 
-    // ④ SIDO_NM 직접 (VWorld/SGIS)
+
     const sNm=String(p.SIDO_NM||p.NM_SIDO||'').trim();
     if(sNm&&normName(sNm)===sidoName)return true;
 
-    // ⑤ full_nm (VWorld: "서울특별시 종로구"), NAME_1 (GADM)
+
     const full=String(p.full_nm||'').trim();
     if(full&&full.startsWith(sidoName))return true;
     const n1=String(p.NAME_1||'').trim();
@@ -1787,12 +1568,10 @@ async function fetchSggBySido(sgId,sidoNm){
 //  SETTINGS
 // ════════════════════════════════════════════
 function openSettings(){
-  ST.vworldKey=localStorage.getItem('el_vworld_key')||'';
   ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
   ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
   ST.apiKey=localStorage.getItem('el_apikey')||'';
   ST.proxyUrl=localStorage.getItem('el_proxy')||'';
-  document.getElementById('in-vworld-key').value=ST.vworldKey;
   document.getElementById('in-sgis-key').value=ST.sgisKey;
   document.getElementById('in-sgis-sec').value=ST.sgisSecret;
   document.getElementById('in-proxy').value=ST.proxyUrl;
@@ -1804,8 +1583,6 @@ function openSettings(){
 }
 function closeSettings(){document.getElementById('settings-overlay').classList.remove('on');}
 function saveSettings(){
-  const vwk=document.getElementById('in-vworld-key').value.trim();
-  if(vwk){ST.vworldKey=vwk;localStorage.setItem('el_vworld_key',vwk);}
   const sk=document.getElementById('in-sgis-key').value.trim();
   const ss=document.getElementById('in-sgis-sec').value.trim();
   const proxy=document.getElementById('in-proxy').value.trim();
@@ -1854,7 +1631,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ST.selectedSido)dri
 ST.apiKey=localStorage.getItem('el_apikey')||'';
 ST.proxyUrl=localStorage.getItem('el_proxy')||'';
 ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
-ST.vworldKey=localStorage.getItem('el_vworld_key')||'';
+
 ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
 ST.mode=localStorage.getItem('el_mode')||'mock';
 ST.pollSec=parseInt(localStorage.getItem('el_poll')||'30');
