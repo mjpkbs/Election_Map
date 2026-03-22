@@ -358,23 +358,37 @@ function getSggParty(sidoName,sggRawName,sgId){
   const tbl=D_SGG[sgId]?.[sidoName]||null;
   if(!tbl)return null;
 
-  const stripAll = n => String(n).replace(/\s+/g, '').replace(/시$|구$|군$|읍$|면$/,'');
-  const nm0 = String(sggRawName).trim().replace(/\s+/g, '');
-  const nm1 = normSgg(sggRawName).replace(/\s+/g, '');
-  
+  // 이름 정규화: 공백 제거 + 시도명/상위 행정구역명 제거
+  // 예) "수원시 장안구" → "장안구", "청주시 상당구" → "상당구"
+  const normalize = n => {
+    let s = String(n).replace(/\s+/g, '');
+    // 통합시 접두 제거: "수원시", "청주시" 등
+    s = s.replace(/^[가-힣]+시(?=[가-힣]+[구군])/, '');
+    // 시/도명 자체 접두 제거
+    if(sidoName) s = s.replace(sidoName.replace(/\s+/g,''), '');
+    return s;
+  };
+  const stripSuffix = n => n.replace(/[시구군읍면동리]$/, '');
+
+  const nm0 = String(sggRawName).replace(/\s+/g, '');
+  const nm0n = normalize(nm0);
+
   for(const k of Object.keys(tbl)){
-    const cleanK = k.replace(/\s+/g, '');
-    if(cleanK === nm0 || cleanK === nm1) return tbl[k];
+    const kn = normalize(k);
+    // 1단계: 정규화 후 완전 일치
+    if(kn === nm0 || kn === nm0n || nm0 === normalize(k)) return tbl[k];
   }
-  const baseName = stripAll(nm1 || nm0);
   for(const k of Object.keys(tbl)){
-    const cleanK = k.replace(/\s+/g, '');
-    if(stripAll(cleanK) === baseName) return tbl[k];
+    const kn = normalize(k);
+    // 2단계: 접미사 제거 후 일치
+    if(stripSuffix(kn) === stripSuffix(nm0n)) return tbl[k];
   }
   for(const k of Object.keys(tbl)){
-    const cleanK = k.replace(/\s+/g, '');
-    if(nm0.includes(cleanK) || cleanK.includes(nm0)) return tbl[k];
-    if(nm1.includes(cleanK) || cleanK.includes(nm1)) return tbl[k];
+    const kn = normalize(k);
+    // 3단계: 포함 관계 (한쪽이 다른 쪽을 포함)
+    if(kn.length >= 2 && nm0n.length >= 2){
+      if(nm0n.includes(kn) || kn.includes(nm0n)) return tbl[k];
+    }
   }
   return null;
 }
@@ -980,14 +994,27 @@ function showSggTooltip(ev,sggName,party,sidoName){
       <div style="width:7px;height:7px;border-radius:2px;background:${pc(party)}"></div>
       <span style="font-size:11px;font-weight:700;color:${pc(party)}">${party}</span>
     </div>`;
+
+    // detail 매칭: getSggParty와 동일한 normalize 로직 사용
     const detail=ST.sggDetail?.[ST.currentSgId]?.[sidoName];
-    const cleanSgg = sggName.replace(/\s+/g, '');
     let d = null;
-    if(detail) {
-      const matchKey = Object.keys(detail).find(k => k.replace(/\s+/g,'') === cleanSgg || k.replace(/\s+/g,'').includes(cleanSgg) || cleanSgg.includes(k.replace(/\s+/g,'')));
+    if(detail){
+      const normalize = n => String(n).replace(/\s+/g,'').replace(/^[가-힣]+시(?=[가-힣]+[구군])/,'');
+      const nm = normalize(sggName);
+      const matchKey = Object.keys(detail).find(k => {
+        const kn = normalize(k);
+        return kn === nm || nm.includes(kn) || kn.includes(nm);
+      });
       d = detail[matchKey];
     }
-    
+
+    // 개표율 표시 (status가 있는 경우)
+    if(d?.rate != null){
+      const statusTxt = d.status==='final' ? '개표완료' : `개표율 ${d.rate}%`;
+      const statusColor = d.status==='final' ? '#6aaa6a' : 'var(--sub)';
+      h+=`<div style="font-size:10px;color:${statusColor};margin-bottom:5px">${statusTxt}</div>`;
+    }
+
     if(d?.cands){
       d.cands.slice(0,3).forEach((c,i)=>{
         h+=`<div style="margin-bottom:3px">
@@ -1280,8 +1307,16 @@ async function fetchOneSido(sgId,nm){
   const totalDugsu=cands.reduce((s,c)=>s+c.votes,0);
   let rate=null;
   if(yutusu>0&&totalDugsu>0){
-    if(Math.abs(totalDugsu-yutusu)/yutusu<0.01) rate=100;  
-    else rate=Math.min(99.9,+(totalDugsu/yutusu*100).toFixed(1));
+    const rawRate = totalDugsu/yutusu*100;
+    // 선관위 API는 무효표 처리 방식에 따라 득표합계 ≠ 유효투표수인 경우 있음
+    // 99% 이상이면 사실상 집계완료로 처리
+    if(rawRate >= 99.0) rate = 100;
+    else rate = Math.min(99.9, +rawRate.toFixed(1));
+  } else if(tusu>0&&sunsu>0) {
+    // yutusu가 0인 경우 투표수/선거인수로 대체 추정
+    const rawRate = tusu/sunsu*100;
+    if(rawRate >= 99.0) rate = 100;
+    else rate = Math.min(99.9, +rawRate.toFixed(1));
   }
   const status=rate===100?'final':rate!==null?'counting':'unknown';
   return{winner:cands[0].party,rate,status,cands, meta:{yutusu,tusu,sunsu}};  
@@ -1382,7 +1417,18 @@ async function fetchSggBySido(sgId,sidoNm){
     cands.sort((a,b)=>b.votes-a.votes);
     if(cands.length){
       result[wiwName]=cands[0].party;
-      detail[wiwName]={winner:cands[0].party,cands};
+      const totalV = cands.reduce((s,c)=>s+c.votes,0);
+      let sggRate = null;
+      if(yutusu>0 && totalV>0){
+        const r = totalV/yutusu*100;
+        sggRate = r >= 99.0 ? 100 : Math.min(99.9, +r.toFixed(1));
+      }
+      detail[wiwName]={
+        winner:cands[0].party,
+        cands,
+        rate: sggRate,
+        status: sggRate===100?'final':sggRate!==null?'counting':'unknown'
+      };
     }
   }
   if(Object.keys(result).length===0)return null;
