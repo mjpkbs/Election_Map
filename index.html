@@ -1491,6 +1491,70 @@ async function fetchAllSggAPI(sgId){
     preprocessSggColors(sgId);
     if(ST.selectedSido){ updateMapColors(); buildSggResultPanel(ST.selectedSido); }
   }
+
+  // ★ 무투표 당선인 전용 API로 덮어쓰기
+  await fetchUncontestedSgg(sgId);
+}
+
+/**
+ * 무투표선거구 당선인 API (WtvtelcddInfoInqireService)
+ * 기초단체장(sgTypecode=4) 무투표 당선인을 가져와
+ * D_SGG / ST.sggDetail의 해당 선거구를 'uncontested'로 마킹
+ */
+async function fetchUncontestedSgg(sgId){
+  if(!ST.apiKey)return;
+  try{
+    const nameList = [...SIDO_ALL.flatMap(nm => NEC_SIDO_NAMES[nm]||[nm]), ''];
+    // 시도명 없이 전체 한 번에 요청 (sdName 생략)
+    const baseUrl = `https://apis.data.go.kr/9760000/WtvtelcddInfoInqireService/getWtvtelpcsccnInfoInqire`
+      + `?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json`;
+    const rows = await _necFetchAll(baseUrl);
+    if(!rows||!rows.length) return;
+
+    rows.forEach(row=>{
+      const sdName  = String(row.sdName||'').trim();
+      const sggName = String(row.sggName||'').trim();
+      const party   = String(row.jdName||'무소속').trim();
+      const candName= String(row.name||'').trim();
+
+      // 시도명 정규화
+      const sidoNm = SIDO_ALL.find(s=>{
+        const aliases = NEC_SIDO_NAMES[s]||[s];
+        return aliases.some(a=>sdName.includes(a)||a.includes(sdName));
+      }) || sdName;
+
+      if(!sidoNm)return;
+
+      // D_SGG 업데이트
+      if(!D_SGG[sgId])D_SGG[sgId]={};
+      if(!D_SGG[sgId][sidoNm])D_SGG[sgId][sidoNm]={};
+
+      // sggName에서 선거구명 추출 ("예천군가선거구" → "예천군")
+      // 가/나 선거구 접미사 제거
+      const cleanSgg = sggName.replace(/[가나다라마바사]선거구$/, '').trim();
+
+      D_SGG[sgId][sidoNm][cleanSgg] = party;
+
+      // sggDetail 업데이트
+      if(!ST.sggDetail)ST.sggDetail={};
+      if(!ST.sggDetail[sgId])ST.sggDetail[sgId]={};
+      if(!ST.sggDetail[sgId][sidoNm])ST.sggDetail[sgId][sidoNm]={};
+
+      ST.sggDetail[sgId][sidoNm][cleanSgg] = {
+        winner: party,
+        cands: [{name: candName, party, votes: 0, pct: 0}],
+        rate: 100,
+        status: 'uncontested'
+      };
+    });
+
+    // 갱신
+    preprocessSggColors(sgId);
+    if(ST.selectedSido){ updateMapColors(); buildSggResultPanel(ST.selectedSido); }
+
+  }catch(e){
+    console.warn('[무투표 API]', e);
+  }
 }
 
 // ════════════════════════════════════════════
