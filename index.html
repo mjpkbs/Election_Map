@@ -926,13 +926,11 @@ function initMapLayers(){
     svg.select('#map-g').attr('transform',ev.transform);
     // vector-effect=non-scaling-stroke 사용으로 stroke-width 재계산 불필요
     // 레이블만 역스케일 (텍스트는 vector-effect 미지원)
-    svg.selectAll('.sido-lbl').attr('transform',d=>{
-      const ct=_path.centroid(d);
-      return `translate(${ev.transform.applyX(ct[0])},${ev.transform.applyY(ct[1])}) scale(${1/k})`;
-    });
-    svg.selectAll('.sgg-lbl').attr('transform',d=>{
-      const ct=_path.centroid(d);
-      return `translate(${ev.transform.applyX(ct[0])},${ev.transform.applyY(ct[1])}) scale(${1/k})`;
+    // 레이블은 #map-g 안에 있으므로 부모 zoom transform 이미 적용됨
+    // applyX/applyY 쓰면 이중 변환 → 원본 centroid + scale(1/k)만 사용
+    svg.selectAll('.sido-lbl,.sgg-lbl').attr('transform',d=>{
+      try{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]}) scale(${1/k})`;}
+      catch{return 'translate(0,0)';}
     });
   });
   svg.call(ST.zoomBehavior);
