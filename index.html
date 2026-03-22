@@ -679,36 +679,34 @@ function normGeo(geo){
       // 시도 파일
       nm=extractSidoName(p)||normName(normSgg(getGeoName(p)));
     }else if(isSggFile){
-      // 시군구 파일
+      // 시군구 파일 — sido/sidoName을 return 객체에 명시적으로 포함
       nm=extractSggName(p)||normSgg(getGeoName(p));
-      // SIGUNGU_CD → sido 코드(앞 2자리) + sidoName 주입
       const sigCd=String(p.SIGUNGU_CD||p.sig_cd||p.SIG_CD||p.CD_SIGUNGU||getGeoCode(p)||'');
-      if(sigCd&&sigCd.length>=2){
-        if(!p.sido)p.sido=sigCd.slice(0,2);
-        // SIDO_CODE 역방향으로 시도명 추출 → sidoName 주입
-        // (로컬 sigungu.geojson에 SIDO_NM이 없는 경우 보완)
-        if(!p.sidoName){
-          const _codeMap=Object.fromEntries(Object.entries(SIDO_CODE).map(([k,v])=>[v,k]));
-          const _sidoNmFromCd=_codeMap[sigCd.slice(0,2)]||null;
-          if(_sidoNmFromCd)p.sidoName=_sidoNmFromCd;
-        }
-      }
-      // SIDO_NM / NM_SIDO 직접 제공된 경우
-      if(p.SIDO_NM&&!p.sidoName)p.sidoName=normName(String(p.SIDO_NM).trim());
-      if(p.NM_SIDO&&!p.sidoName)p.sidoName=normName(String(p.NM_SIDO).trim());
+
+      // sido 코드 (앞 2자리)
+      const _sido=sigCd.length>=2?sigCd.slice(0,2):(p.sido||'');
+
+      // sidoName — SIDO_CODE 역방향으로 계산
+      const _codeToSido=Object.fromEntries(Object.entries(SIDO_CODE).map(([k,v])=>[v,k]));
+      const _sidoName=
+        (p.SIDO_NM?normName(String(p.SIDO_NM).trim()):null)||
+        (p.NM_SIDO?normName(String(p.NM_SIDO).trim()):null)||
+        _codeToSido[_sido]||
+        null;
+
+      // return에서 명시적으로 추가 (변수 mutation에 의존하지 않음)
+      const code=getGeoCode(p);
+      return{...f,properties:{...p,name:nm,code,sido:_sido,sidoName:_sidoName}};
+
     }else{
-      // GADM / 알 수 없는 형식
-      // NAME_1 = 시도(영문), NAME_2 = 시군구(한글 or 영문)
+      // GADM / 알 수 없는 형식 (NAME_1=시도영문, NAME_2=시군구)
       const hasName1=!!(p.NAME_1||p.name_1);
       if(hasName1){
-        // 시군구 파일 (GADM municipalities)
-        const sidoEng=p.NAME_1||p.name_1||'';
-        const sidoKr=normName(sidoEng);
+        const sidoKr=normName(p.NAME_1||p.name_1||'');
         nm=normSgg(p.NAME_2||p.name_2||getGeoName(p)||'');
-        // _sidoName 주입 (드릴다운 필터용)
-        if(sidoKr&&!p.sidoName)p.sidoName=sidoKr;
-        // sido 코드 주입
-        if(sidoKr&&SIDO_CODE[sidoKr]&&!p.sido)p.sido=SIDO_CODE[sidoKr];
+        const _sido2=SIDO_CODE[sidoKr]||'';
+        const code=getGeoCode(p);
+        return{...f,properties:{...p,name:nm,code,sido:_sido2,sidoName:sidoKr}};
       }else{
         nm=extractSidoName(p)||extractSggName(p)||normName(normSgg(getGeoName(p)));
       }
