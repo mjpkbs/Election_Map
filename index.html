@@ -642,6 +642,11 @@ function initMapLayers(){
     ST.currentTransform=ev.transform;
     const k=ev.transform.k;
     svg.select('#map-g').attr('transform',ev.transform);
+    
+    // **성능 최적화 핵심**: CSS vector-effect 대신 수동으로 stroke-width 설정 (비약적으로 빠름)
+    svg.selectAll('.sido-p').attr('stroke-width', 0.7 / k);
+    svg.selectAll('.sgg-path').attr('stroke-width', 0.4 / k);
+    
     svg.selectAll('.sido-lbl,.sgg-lbl').attr('transform',d=>{
       try{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]}) scale(${1/k})`;}
       catch{return 'translate(0,0)';}
@@ -666,7 +671,9 @@ function initMapLayers(){
     .attr('class','sido-p')
     .attr('d',_path)
     .attr('fill',d=>_sidoFill(d.properties))  
-    .attr('stroke','#04060e').attr('stroke-width',0.7).attr('vector-effect','non-scaling-stroke')
+    .attr('stroke','#04060e')
+    .attr('stroke-width', 0.7)
+    // .attr('vector-effect','non-scaling-stroke') -> 삭제 (성능 문제)
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
       const nm=getSidoNameFromProps(d.properties);
@@ -676,7 +683,10 @@ function initMapLayers(){
     .on('mousemove',ev=>moveTooltip(ev,svgEl.clientWidth))
     .on('mouseout',function(ev,d){
       const nm=getSidoNameFromProps(d.properties);
-      if(!ST.selectedSido)d3.select(this).attr('opacity',ST.selectedSido===nm?1:(ST.selectedSido?ST.bgOpacity:1));
+      // **버그 수정**: 겹침을 방지하기 위해 선택된 시도는 opacity 0 유지
+      if(!ST.selectedSido) {
+          d3.select(this).attr('opacity', ST.selectedSido===nm ? 0 : (ST.selectedSido ? ST.bgOpacity : 1));
+      }
       if(!ST.selectedSido||ST.selectedSido!==nm)clearDetail();
       hideTooltip();
     })
@@ -688,7 +698,16 @@ function initMapLayers(){
   d3.select('#sido-lbl-layer').selectAll('.sido-lbl')
     .data(ST.sidoGeo.features).join('text')
     .attr('class','sido-lbl')
-    .attr('transform',d=>{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]})`;})
+    .attr('transform',d=>{
+        const ct=_path.centroid(d);
+        let nm = getSidoNameFromProps(d.properties);
+        // 서울과 경기도 라벨이 겹치지 않도록 경기도 좌표 보정
+        if(nm === '경기도') {
+            ct[0] += 15;
+            ct[1] += 25;
+        }
+        return `translate(${ct[0]},${ct[1]})`;
+    })
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family',"'Noto Sans KR',sans-serif")
     .attr('font-size',d=>getSidoNameFromProps(d.properties)==='경기도'?'13':'11')
@@ -701,10 +720,10 @@ function initMapLayers(){
 
 function updateMapColors(){
   if(!_mapInitialized)return;
-  // 슬라이더 bgOpacity 반영
+  // **겹침 버그 해결**: 클릭된 시도는 투명도를 0으로 만들어 시군구 지도와 겹치지 않게 함
   d3.selectAll('.sido-p')
     .attr('fill',d=>_sidoFill(d.properties))
-    .attr('opacity',d=>ST.selectedSido?(getSidoNameFromProps(d.properties)===ST.selectedSido?1:ST.bgOpacity):1);
+    .attr('opacity',d=>ST.selectedSido?(getSidoNameFromProps(d.properties)===ST.selectedSido?0:ST.bgOpacity):1);
     
   d3.selectAll('.sido-lbl')
     .attr('opacity',d=>{
@@ -736,7 +755,12 @@ function resizeMap(){
   _path=d3.geoPath().projection(_proj);
   d3.selectAll('.sido-p').attr('d',_path);
   d3.selectAll('.sgg-path').attr('d',d=>{try{return _path(d);}catch{return '';}});
-  d3.selectAll('.sido-lbl').attr('transform',d=>{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]})`;});
+  d3.selectAll('.sido-lbl').attr('transform',d=>{
+      const ct=_path.centroid(d);
+      let nm = getSidoNameFromProps(d.properties);
+      if(nm === '경기도') { ct[0] += 15; ct[1] += 25; }
+      return `translate(${ct[0]},${ct[1]})`;
+  });
   d3.selectAll('.sgg-lbl').attr('transform',d=>{try{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]})`;}catch{return 'translate(0,0)';}});
   
   if(ST.selectedSido&&ST.zoomBehavior){
@@ -766,6 +790,8 @@ function _renderSggLayer(g, sidoName){
     return false;
   });
 
+  const currentScale = ST.currentTransform ? ST.currentTransform.k : 1;
+
   sggLayer.selectAll('.sgg-path').data(sggFeatures).join('path')
     .attr('class','sgg-path')
     .attr('d',d=>{try{return _path(d);}catch{return '';}})
@@ -777,7 +803,8 @@ function _renderSggLayer(g, sidoName){
       const sido=ST.data[sidoName];
       return sido?pc(sido.winner)+'44':'#1a2030';
     })
-    .attr('stroke','rgba(0,0,0,.5)').attr('stroke-width',0.4).attr('vector-effect','non-scaling-stroke')
+    .attr('stroke','rgba(0,0,0,.5)')
+    .attr('stroke-width', 0.4 / currentScale) // 수동 stroke-width 설정
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
       d3.select(this).attr('opacity',.75);
@@ -811,7 +838,8 @@ function drillDown(sidoName){
   document.getElementById('drill-nav').style.display='block';
   document.getElementById('opacity-row').style.display='flex';
 
-  d3.selectAll('.sido-p').attr('opacity',d=>getSidoNameFromProps(d.properties)===sidoName?1:ST.bgOpacity);
+  // **핵심 변경점**: 선택된 시도는 아예 보이지 않게(opacity 0) 만들어 밑에 깔리지 않도록 함
+  d3.selectAll('.sido-p').attr('opacity',d=>getSidoNameFromProps(d.properties)===sidoName ? 0 : ST.bgOpacity);
   d3.selectAll('.sido-lbl').attr('opacity',d=>getSidoNameFromProps(d.properties)===sidoName?(ST.showLabels?1:0):0);
 
   const g=d3.select('#map-g');
@@ -865,7 +893,7 @@ function drillUp(){
 function changeBgOpacity(val) {
   ST.bgOpacity = parseFloat(val);
   if(ST.selectedSido) {
-    d3.selectAll('.sido-p').attr('opacity', d => getSidoNameFromProps(d.properties) === ST.selectedSido ? 1 : ST.bgOpacity);
+    d3.selectAll('.sido-p').attr('opacity', d => getSidoNameFromProps(d.properties) === ST.selectedSido ? 0 : ST.bgOpacity);
   }
 }
 
@@ -1068,14 +1096,11 @@ function exportMapPNG(withLabels){
   if(g&&ST.currentTransform){
     const t=ST.currentTransform;
     g.setAttribute('transform',`translate(${t.x},${t.y}) scale(${t.k})`);
-    clone.querySelectorAll('.sido-p').forEach(p=>{
-      p.setAttribute('stroke-width',0.7/t.k);
-      p.removeAttribute('vector-effect');
-    });
-    clone.querySelectorAll('.sgg-path').forEach(p=>{
-      p.setAttribute('stroke-width',0.4/t.k);
-      p.removeAttribute('vector-effect');
-    });
+    
+    // 내보내기 시에도 stroke-width 수동 재계산
+    clone.querySelectorAll('.sido-p').forEach(p=>p.setAttribute('stroke-width',0.7/t.k));
+    clone.querySelectorAll('.sgg-path').forEach(p=>p.setAttribute('stroke-width',0.4/t.k));
+    
     clone.querySelectorAll('.sido-lbl,.sgg-lbl').forEach(txt=>{
       const fs=parseFloat(txt.getAttribute('font-size')||'11');
       txt.setAttribute('font-size',Math.max(3,fs/t.k));
