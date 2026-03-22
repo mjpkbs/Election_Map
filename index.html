@@ -223,6 +223,18 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 <div id="settings-overlay" onclick="if(event.target===this)closeSettings()">
   <div id="settings-modal">
     <div class="m-title">⚙ 설정</div>
+    <div class="m-sec">🗺 지도 데이터 (SGIS)</div>
+    <div class="m-group"><label class="m-lbl">SGIS Consumer Key</label><input class="m-input" id="in-sgis-key" placeholder="sgis.mods.go.kr 에서 발급"></div>
+    <div class="m-group"><label class="m-lbl">SGIS Consumer Secret</label><input class="m-input" type="password" id="in-sgis-sec" placeholder="SGIS Consumer Secret"></div>
+    <div class="m-group"><label class="m-lbl">CORS 프록시 URL</label>
+      <input class="m-input" id="in-proxy" placeholder="https://election-proxy.mjpkbs.workers.dev/">
+      <div class="m-hint">SGIS API 프록시로 사용 · 선관위 API는 프록시 없이도 직접 호출 가능</div>
+    </div>
+    <div class="m-group">
+      <button class="btn-sm" onclick="fetchSGISGeo()">🗺 SGIS 지도 갱신</button>
+      <button class="btn-sm" onclick="clearGeoCache()" style="margin-left:6px">🗑 캐시 삭제</button>
+      <div style="font-size:11px;color:var(--dim);margin-top:6px" id="cache-st">캐시 없음</div>
+    </div>
     <div class="m-sec">📡 선거 결과 API</div>
     <div class="m-group"><label class="m-lbl">2026 데이터 모드</label>
       <div class="tog-row">
@@ -611,6 +623,75 @@ async function fetchSGISGeo(){
   finally{if(btn){btn.disabled=false;btn.textContent='🗺 SGIS 지도 갱신';}}
 }
 function clearGeoCache(){localStorage.removeItem('el_geo_cache');document.getElementById('cache-st').textContent='캐시 삭제됨';}
+
+// 공통 지도 적용 함수
+function _applyGeo(sidoGeo,sigunguGeo,src){
+  ST.sidoGeo=sidoGeo;ST.sigunguGeo=sigunguGeo;ST.geoLoaded=true;
+  console.log('[GeoJSON] 로드 완료:',src,
+    '| 시도',sidoGeo.features.length,'개',
+    '| 시군구',sigunguGeo.features.length,'개',
+    '| 시군구 샘플 keys:',Object.keys(sigunguGeo.features[0]?.properties||{}).slice(0,8));
+  document.getElementById('loading-wrap').style.display='none';
+  preprocessSggColors(ST.currentSgId);
+  renderAll();
+}
+
+async function loadGeo(){
+  const ltxt=document.getElementById('loading-txt');
+  const lsub=document.getElementById('loading-sub');
+  ltxt.textContent='지도 데이터 로딩 중...';
+
+  function _showErr(tag,msg){
+    const errEl=document.getElementById('err-msg');
+    if(errEl){errEl.textContent=`${tag}: ${msg}`;errEl.classList.add('show');
+      setTimeout(()=>errEl.classList.remove('show'),6000);}
+    if(lsub){lsub.textContent=msg;setTimeout(()=>{if(lsub)lsub.textContent='';},5000);}
+  }
+
+  // ── 1순위: 캐시 (localStorage) ─────────────────────────────────
+  try{
+    const cached=JSON.parse(localStorage.getItem('el_geo_cache')||'null');
+    if(cached?.sido&&cached?.sigungu&&cached.ts&&(Date.now()-cached.ts)<86400000*7){
+      ltxt.textContent='캐시에서 지도 로드 중...';
+      _applyGeo(cached.sido,cached.sigungu,'캐시('+new Date(cached.ts).toLocaleDateString('ko-KR')+')');
+      return;
+    }
+  }catch(e){console.warn('[캐시]',e.message);}
+
+  // ── 2순위: SGIS API ──────────────────────────────────────────────
+  if(ST.sgisKey&&ST.sgisSecret&&ST.proxyUrl){
+    ltxt.textContent='SGIS API 연결 중...';
+    try{
+      await _loadSgisGeoAuto();
+      return;
+    }catch(e){
+      console.warn('[SGIS] 실패:',e.message);
+      ltxt.textContent='SGIS 실패 → 로컬 파일 시도 중...';
+      _showErr('SGIS',e.message);
+    }
+  }
+
+  // ── 3순위: 로컬 geo/ 파일 ───────────────────────────────────────
+  const localSrcs=[
+    {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
+    {sido:'./geo/sido.json',sigungu:'./geo/sigungu.json'},
+  ];
+  for(const src of localSrcs){
+    ltxt.textContent=`로컬 파일 로딩: ${src.sigungu.split('/').pop()}`;
+    const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
+    if(s&&sg){_applyGeo(normGeo(s),normGeo(sg),src.sido);return;}
+  }
+
+  // ── 4순위: CDN fallback (GADM) ──────────────────────────────────
+  const cdnSrcs=GEO_SRCS.filter(s=>s.sido.startsWith('http'));
+  for(const src of cdnSrcs){
+    ltxt.textContent=`CDN 로딩: ${src.sido.split('/').pop()}`;
+    const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
+    if(s&&sg){_applyGeo(normGeo(s),normGeo(sg),src.sido);return;}
+  }
+
+  ltxt.textContent='지도 로드 실패 — 설정에서 SGIS 키를 확인하세요';
+}
 
 // ════════════════════════════════════════════
 //  메인 지도 렌더 — 초기화(1회) + 색상 업데이트(빈번)
