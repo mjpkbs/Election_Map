@@ -33,7 +33,7 @@ export default {
     }
 
     // 보안: apis.data.go.kr 만 허용
-    const allowed = ['apis.data.go.kr', 'sgisapi.kostat.go.kr', 'api.vworld.kr'];
+    const allowed = ['apis.data.go.kr', 'sgisapi.kostat.go.kr', 'sgisapi.mods.go.kr', 'api.vworld.kr'];
     try {
       const targetHost = new URL(decodeURIComponent(targetUrl)).hostname;
       if (!allowed.includes(targetHost)) {
