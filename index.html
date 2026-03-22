@@ -485,16 +485,31 @@ function preprocessSggColors(sgId){
   Object.entries(SIDO_CODE).forEach(([nm,cd])=>{codeToSido[cd]=nm;});
   ST.sigunguGeo.features.forEach(f=>{
     const p=f.properties;
-    // 시도명 결정
-    let sidoName=p._sidoName||null;
+    // 시도명 결정 (모든 소스 커버)
+    let sidoName=p._sidoName||p.sidoName||null;
     if(!sidoName){
       const sn=String(p.SIDO_NM||p.NM_SIDO||p.sido_nm||'').trim();
       if(sn)sidoName=normName(sn);
     }
     if(!sidoName){
-      const cd=String(p.SIGUNGU_CD||p.code||getGeoCode(p)||'');
+      // GADM CDN: NAME_1 영문 시도명
+      const n1=String(p.NAME_1||p.name_1||'').trim();
+      if(n1)sidoName=normName(n1);
+    }
+    if(!sidoName){
+      // full_nm: "서울특별시 종로구" → 앞부분 추출
+      const full=String(p.full_nm||'').trim();
+      if(full){const found=SIDO_ALL.find(s=>full.startsWith(s));if(found)sidoName=found;}
+    }
+    if(!sidoName){
+      const cd=String(p.SIGUNGU_CD||p.sig_cd||p.code||getGeoCode(p)||'');
       if(cd.length>=2)sidoName=codeToSido[cd.slice(0,2)]||null;
     }
+    if(!sidoName&&p.sido){
+      sidoName=codeToSido[String(p.sido)]||null;
+    }
+    // 시도명을 찾았으면 _sidoName에 저장 (이후 필터에서 재사용)
+    if(sidoName)p._sidoName=sidoName;
     // 시군구명 결정
     const rawNm=p.name||extractSggName(p)||getGeoName(p);
     // 정당 매핑
@@ -520,8 +535,8 @@ function preprocessSggColors(sgId){
 // ════════════════════════════════════════════
 let ST={
   sidoGeo:null,sigunguGeo:null,geoLoaded:false,
-  currentSgId:'20260603',
-  data:JSON.parse(JSON.stringify(D_SIDO['20260603'])),
+  currentSgId:'20220601',  // D_SGG 데이터 있는 연도로 초기화 (2026은 기초단체장 데이터 없음)
+  data:JSON.parse(JSON.stringify(D_SIDO['20220601'])),
   dataSource:'mock',
   showLabels:true,
   selectedSido:null,
@@ -671,9 +686,24 @@ function normGeo(geo){
       }
       // NM_SIDO로 sido 이름 주입
       if(p.NM_SIDO&&!p.sidoName)p.sidoName=normName(p.NM_SIDO);
+      // SIDO_NM으로도 주입
+      if(p.SIDO_NM&&!p.sidoName)p.sidoName=normName(p.SIDO_NM);
     }else{
-      // 알 수 없는 형식 → 최대한 추출
-      nm=extractSidoName(p)||extractSggName(p)||normName(normSgg(getGeoName(p)));
+      // GADM / 알 수 없는 형식
+      // NAME_1 = 시도(영문), NAME_2 = 시군구(한글 or 영문)
+      const hasName1=!!(p.NAME_1||p.name_1);
+      if(hasName1){
+        // 시군구 파일 (GADM municipalities)
+        const sidoEng=p.NAME_1||p.name_1||'';
+        const sidoKr=normName(sidoEng);
+        nm=normSgg(p.NAME_2||p.name_2||getGeoName(p)||'');
+        // _sidoName 주입 (드릴다운 필터용)
+        if(sidoKr&&!p.sidoName)p.sidoName=sidoKr;
+        // sido 코드 주입
+        if(sidoKr&&SIDO_CODE[sidoKr]&&!p.sido)p.sido=SIDO_CODE[sidoKr];
+      }else{
+        nm=extractSidoName(p)||extractSggName(p)||normName(normSgg(getGeoName(p)));
+      }
     }
 
     const code=getGeoCode(p);
@@ -726,7 +756,7 @@ async function loadGeo(){
   for(const src of cdnSrcs){
     document.getElementById('loading-txt').textContent=`CDN 로딩: ${src.sido.split('/').pop()}`;
     const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
-    if(s&&sg){ST.sidoGeo=normGeo(s);ST.sigunguGeo=normGeo(sg);ST.geoLoaded=true;document.getElementById('loading-wrap').style.display='none';renderAll();return;}
+    if(s&&sg){ST.sidoGeo=normGeo(s);ST.sigunguGeo=normGeo(sg);ST.geoLoaded=true;document.getElementById('loading-wrap').style.display='none';preprocessSggColors(ST.currentSgId);renderAll();return;}
   }
   document.getElementById('loading-txt').textContent='지도 로딩 실패 — 설정에서 VWorld 키를 입력하세요';
 }
@@ -882,9 +912,16 @@ function updateMapColors(){
       if(!ST.selectedSido)return 1;
       return getSidoNameFromProps(d.properties)===ST.selectedSido?1:0;
     });
-  // 시군구 fill 업데이트 (드릴다운 중) - 사전계산값 사용
+  // 시군구 fill 업데이트 (드릴다운 중)
   if(ST.selectedSido){
-    d3.selectAll('.sgg-path').attr('fill',d=>d.properties._sggColor||'#1a2030');
+    d3.selectAll('.sgg-path').attr('fill',d=>{
+      if(d.properties._sggColor&&d.properties._sggColor!=='#1a2030')return d.properties._sggColor;
+      const rawNm=d.properties.name||extractSggName(d.properties)||getGeoName(d.properties);
+      const party=getSggParty(ST.selectedSido,rawNm,ST.currentSgId);
+      if(party)return pc(party);
+      const sido=ST.data[ST.selectedSido];
+      return sido?pc(sido.winner)+'44':'#1a2030';
+    });
   }
   renderLegend();
 }
@@ -923,25 +960,63 @@ function _renderSggLayer(g, sidoName){
   const code=SIDO_CODE[sidoName]||'';
   const sggFeatures=ST.sigunguGeo.features.filter(f=>{
     const p=f.properties;
-    // SIGUNGU_CD 앞 자리로 시도 코드 매칭
-    const cd=String(p.SIGUNGU_CD||p.code||getGeoCode(p)||'');
-    if(code&&cd&&cd.startsWith(code))return true;
-    // sido 필드 직접 비교
+
+    // ① 사전계산된 _sidoName (가장 빠르고 확실)
+    if(p._sidoName&&p._sidoName===sidoName)return true;
+
+    // ② normGeo가 주입한 sidoName 필드
+    if(p.sidoName&&p.sidoName===sidoName)return true;
+
+    // ③ SIGUNGU_CD / sig_cd / code 앞 2자리
+    const cd=String(p.SIGUNGU_CD||p.sig_cd||p.SIG_CD||p.CD_SIGUNGU||p.code||getGeoCode(p)||'');
+    if(code&&cd.length>=2&&cd.startsWith(code))return true;
+
+    // ④ sido 필드 (normGeo 주입)
     if(p.sido&&code&&String(p.sido)===code)return true;
-    // SIDO_NM 비교
+
+    // ⑤ SIDO_NM / NM_SIDO / sido_nm (VWorld/SGIS 계열)
     const sn=String(p.SIDO_NM||p.NM_SIDO||p.sido_nm||'').trim();
     if(sn&&normName(sn)===sidoName)return true;
+
+    // ⑥ full_nm 앞부분 (VWorld: "서울특별시 종로구")
+    const full=String(p.full_nm||'').trim();
+    if(full&&full.startsWith(sidoName))return true;
+
+    // ⑦ NAME_1 (GADM CDN: 영문 시도명)
+    const n1=String(p.NAME_1||p.name_1||'').trim();
+    if(n1&&normName(n1)===sidoName)return true;
+
+    // ⑧ name 필드 안에 시도 짧은 이름 포함 ("서울시 종로구" 등)
+    const nm=String(p.name||'').trim();
+    if(nm&&sidoName&&nm.includes(shortSido(sidoName).replace(/시$/,'')))return true;
+
     return false;
   });
-  console.log('[드릴다운]',sidoName,'시군구',sggFeatures.length,'개, code:',code);
-  if(!sggFeatures.length)return;
+
+  console.log('[드릴다운]',sidoName,'시군구',sggFeatures.length,'개, code:',code,
+    '| 샘플keys:', Object.keys(ST.sigunguGeo.features[0]?.properties||{}).slice(0,8));
+
+  if(!sggFeatures.length){
+    const listEl=document.getElementById('sido-list');
+    if(listEl)listEl.innerHTML=`<div style="padding:10px 8px;font-size:11px;color:var(--dim)">시군구 경계 매칭 실패<br><span style="color:#6a9af5;font-size:10px">콘솔 로그 확인 필요</span></div>`;
+    return;
+  }
 
   const sggLayer=g.append('g').attr('id','sgg-layer');
 
   sggLayer.selectAll('.sgg-path').data(sggFeatures).join('path')
     .attr('class','sgg-path')
     .attr('d',d=>{try{return _path(d);}catch{return '';}})
-    .attr('fill',d=>d.properties._sggColor||'#1a2030')  // 사전계산 색상 사용
+    .attr('fill',d=>{
+      // 사전계산 색상 우선 사용
+      if(d.properties._sggColor&&d.properties._sggColor!=='#1a2030')return d.properties._sggColor;
+      // fallback: 실시간 getSggParty 계산
+      const rawNm=d.properties.name||extractSggName(d.properties)||getGeoName(d.properties);
+      const party=getSggParty(sidoName,rawNm,ST.currentSgId);
+      if(party)return pc(party);
+      const sido=ST.data[sidoName];
+      return sido?pc(sido.winner)+'44':'#1a2030';
+    })
     .attr('stroke','rgba(0,0,0,.5)').attr('stroke-width',0.4).attr('vector-effect','non-scaling-stroke')
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
@@ -1453,6 +1528,8 @@ setInterval(()=>{document.getElementById('time-str').textContent=new Date().toLo
 //  RENDER ALL
 // ════════════════════════════════════════════
 function renderAll(){
+  // 시군구 색 사전계산: 항상 최신 상태 보장
+  if(ST.sigunguGeo)preprocessSggColors(ST.currentSgId);
   if(!_mapInitialized)initMapLayers();
   else updateMapColors();
   renderList();renderSummaryBar();
