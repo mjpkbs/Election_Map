@@ -322,7 +322,26 @@ const SIGUNGU_FILE_CODE={'11':'서울특별시','21':'부산광역시','22':'대
 const NO_SGG=['세종특별자치시','제주특별자치도']; // 기초단체장 없음
 
 // gadm 영어명 → 한국어 변환
-const GEO_NORM={'강원도':'강원특별자치도','전라북도':'전북특별자치도','Seoul':'서울특별시','Busan':'부산광역시','Daegu':'대구광역시','Incheon':'인천광역시','Gwangju':'광주광역시','Daejeon':'대전광역시','Ulsan':'울산광역시','Sejong':'세종특별자치시','Gyeonggi-do':'경기도','Gangwon-do':'강원특별자치도','Gangwon':'강원특별자치도','Chungcheongbuk-do':'충청북도','Chungcheongnam-do':'충청남도','North Chungcheong':'충청북도','South Chungcheong':'충청남도','Jeollabuk-do':'전북특별자치도','Jeollanam-do':'전라남도','North Jeolla':'전북특별자치도','South Jeolla':'전라남도','Gyeongsangbuk-do':'경상북도','Gyeongsangnam-do':'경상남도','North Gyeongsang':'경상북도','South Gyeongsang':'경상남도','Jeju':'제주특별자치도','Jeju-do':'제주특별자치도'};
+const GEO_NORM={
+  // SGIS adm_nm 약칭 보정 (충청북 → 충청북도 등)
+  '충북':'충청북도','충남':'충청남도','경북':'경상북도','경남':'경상남도',
+  '전남':'전라남도','전북':'전북특별자치도',
+  '충청북':'충청북도','충청남':'충청남도',
+  '경상북':'경상북도','경상남':'경상남도',
+  // 구명칭 → 현행명칭
+  '강원도':'강원특별자치도','전라북도':'전북특별자치도','제주도':'제주특별자치도',
+  // GADM 영문명
+  'Seoul':'서울특별시','Busan':'부산광역시','Daegu':'대구광역시','Incheon':'인천광역시',
+  'Gwangju':'광주광역시','Daejeon':'대전광역시','Ulsan':'울산광역시','Sejong':'세종특별자치시',
+  'Gyeonggi-do':'경기도','Gangwon-do':'강원특별자치도','Gangwon':'강원특별자치도',
+  'Chungcheongbuk-do':'충청북도','Chungcheongnam-do':'충청남도',
+  'North Chungcheong':'충청북도','South Chungcheong':'충청남도',
+  'Jeollabuk-do':'전북특별자치도','Jeollanam-do':'전라남도',
+  'North Jeolla':'전북특별자치도','South Jeolla':'전라남도',
+  'Gyeongsangbuk-do':'경상북도','Gyeongsangnam-do':'경상남도',
+  'North Gyeongsang':'경상북도','South Gyeongsang':'경상남도',
+  'Jeju':'제주특별자치도','Jeju-do':'제주특별자치도',
+};
 // gadm 시군구 영어→한국어 (주요 도시)
 const SGG_ENGKOR={'Jongno-gu':'종로구','Jung-gu':'중구','Yongsan-gu':'용산구','Seongdong-gu':'성동구','Gwangjin-gu':'광진구','Dongdaemun-gu':'동대문구','Jungnang-gu':'중랑구','Seongbuk-gu':'성북구','Gangbuk-gu':'강북구','Dobong-gu':'도봉구','Nowon-gu':'노원구','Eunpyeong-gu':'은평구','Seodaemun-gu':'서대문구','Mapo-gu':'마포구','Yangcheon-gu':'양천구','Gangseo-gu':'강서구','Guro-gu':'구로구','Geumcheon-gu':'금천구','Yeongdeungpo-gu':'영등포구','Dongjak-gu':'동작구','Gwanak-gu':'관악구','Seocho-gu':'서초구','Gangnam-gu':'강남구','Songpa-gu':'송파구','Gangdong-gu':'강동구','Suyeong-gu':'수영구','Sasang-gu':'사상구','Giijang-gun':'기장군','Gijang-gun':'기장군','Busan-jinggu':'부산진구','Busanjin-gu':'부산진구','Dongnae-gu':'동래구','Yeondo-gu':'영도구','Nam-gu':'남구','Buk-gu':'북구','Haeundae-gu':'해운대구','Saha-gu':'사하구','Geumjeong-gu':'금정구','Yeonje-gu':'연제구','Dong-gu':'동구','Seo-gu':'서구','Suseong-gu':'수성구','Dalseo-gu':'달서구','Dalseong-gun':'달성군','Gunwi-gun':'군위군','Michuhol-gu':'미추홀구','Yeonsu-gu':'연수구','Namdong-gu':'남동구','Bupyeong-gu':'부평구','Gyeyang-gu':'계양구','Ganghwa-gun':'강화군','Ongjin-gun':'옹진군','Gwangsan-gu':'광산구','Daedeok-gu':'대덕구','Yuseong-gu':'유성구','Ulju-gun':'울주군','Suwon':'수원시','Suwon-si':'수원시','Seongnam':'성남시','Seongnam-si':'성남시','Uijeongbu':'의정부시','Anyang':'안양시','Bucheon':'부천시','Gwangmyeong':'광명시','Pyeongtaek':'평택시','Dongducheon':'동두천시','Ansan':'안산시','Goyang':'고양시','Gwacheon':'과천시','Guri':'구리시','Namyangju':'남양주시','Osan':'오산시','Siheung':'시흥시','Gunpo':'군포시','Uiwang':'의왕시','Hanam':'하남시','Yongin':'용인시','Paju':'파주시','Icheon':'이천시','Anseong':'안성시','Gimpo':'김포시','Hwaseong':'화성시','Gwangju':'광주시','Yangju':'양주시','Pocheon':'포천시','Yeoju':'여주시','Yeoncheon-gun':'연천군','Gapyeong-gun':'가평군','Yangpyeong-gun':'양평군'};
 
@@ -330,7 +349,16 @@ const normName=n=>GEO_NORM[n]||n;
 const normSgg=n=>SGG_ENGKOR[n]||n;
 const getGeoName=p=>p.SIDO_NM||p.SIGUNGU_NM||p.NM_SIGUNGU||p.NM_SIDO||p.sig_kor_nm||p.ctp_kor_nm||p.name||p.adm_nm||p.CTP_KOR_NM||p.SIG_KOR_NM||p.KOR_NM||p.NAME_2||p.NAME_1||'';
 const getGeoCode=p=>String(p.SIGUNGU_CD||p.SIDO_CD||p.sig_cd||p.ctprvn_cd||p.CD_SIGUNGU||p.CD_SIDO||p.code||p.adm_cd||p.id||p.CTPRVN_CD||p.SIG_CD||p.ID_1||p.id_1||'');
-const shortSido=n=>n.replace('특별자치도','').replace('특별자치시','').replace('특별시','시').replace('광역시','시').replace(/^경상/,'경').replace(/^충청/,'충');
+const shortSido=n=>{
+  if(n==='충청북도')return '충북';
+  if(n==='충청남도')return '충남';
+  if(n==='경상북도')return '경북';
+  if(n==='경상남도')return '경남';
+  if(n==='전라남도')return '전남';
+  return n
+    .replace('특별자치도','').replace('특별자치시','')
+    .replace('특별시','시').replace('광역시','시');
+};
 
 function getSggParty(sidoName,sggRawName,sgId){
   if(!sggRawName)return null;
@@ -1497,43 +1525,82 @@ async function fetchAllSidoAPI(sgId){
   }
 }
 
+// 선관위 API 시도명 → API 파라미터명 변환 (구명칭 사용하는 경우 대응)
+const NEC_SIDO_NAMES={
+  '강원특별자치도':['강원특별자치도','강원도'],
+  '전북특별자치도':['전북특별자치도','전라북도'],
+  '제주특별자치도':['제주특별자치도','제주도'],
+};
+
+async function _necFetch(necUrl){
+  const url=ST.proxyUrl
+    ? ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`
+    : necUrl;
+  const r=await fetch(url);
+  if(!r.ok)throw new Error(`HTTP ${r.status}`);
+  const j=await r.json();
+  // 공공데이터포털 오류 XML이 JSON으로 오는 경우
+  const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+  return Array.isArray(items)?items:(items?[items]:null);
+}
+
 async function fetchOneSido(sgId,nm){
   const controller=new AbortController();
-  const timeoutId=setTimeout(()=>controller.abort(),10000); // 10초 timeout
+  const timeoutId=setTimeout(()=>controller.abort(),10000);
   try{
-    const necUrl=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
-      +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=3`
-      +`&sdName=${encodeURIComponent(nm)}&numOfRows=50&pageNo=1&resultType=json`;
-    // 프록시가 있으면 프록시 경유, 없으면 직접 시도
-    const url=ST.proxyUrl
-      ? ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`
-      : necUrl;
-    const r=await fetch(url,{signal:controller.signal});
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    const j=await r.json();
-    const items=j?.response?.body?.items?.item??j?.body?.items?.item;
-    if(!items)return null;
-    const arr=Array.isArray(items)?items:[items];
-    if(!arr.length)return null;
-    const row=arr.find(it=>!it.wiwName||it.wiwName===nm)||arr[0];
+    // API 파라미터 후보 (신명칭 먼저, 구명칭 fallback)
+    const nameList=NEC_SIDO_NAMES[nm]||[nm];
+    let arr=null;
+    for(const sdName of nameList){
+      const necUrl=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
+        +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=3`
+        +`&sdName=${encodeURIComponent(sdName)}&numOfRows=50&pageNo=1&resultType=json`;
+      try{
+        arr=await _necFetch(necUrl);
+        if(arr&&arr.length){console.log(`[NEC] ${nm} → sdName="${sdName}" 성공`);break;}
+      }catch(e){console.warn(`[NEC] ${nm} sdName="${sdName}" 실패:`,e.message);}
+    }
+    if(!arr||!arr.length)return null;
+
+    // 시도 전체 합산 (wiwName이 없거나 시도명과 같은 행)
+    const row=arr.find(it=>!it.wiwName||it.wiwName===nm||it.wiwName==='')||arr[0];
+
+    // 후보자 파싱 (API 스펙: jd01~jd50, hbj01~hbj50, dugsu01~dugsu50)
     const cands=[];
-    const tv=parseInt(row.yutusu||row.tusu||0);
+    const yutusu=parseInt(row.yutusu||0);  // 유효투표수 (득표율 계산 기준)
+    const tusu=parseInt(row.tusu||0);       // 투표수 (= 유효+무효)
+    const sunsu=parseInt(row.sunsu||0);     // 선거인수
+    const tv=yutusu||tusu||1;
+
     for(let i=1;i<=50;i++){
       const x=String(i).padStart(2,'0');
-      const party=row[`jd${x}`],name=row[`hbj${x}`],votes=parseInt(row[`dugsu${x}`]||0);
+      const party=row[`jd${x}`];
+      const name=row[`hbj${x}`];
+      const votes=parseInt(row[`dugsu${x}`]||0);
       if(!name&&!votes)break;
       if(isNaN(votes)||votes<0)continue;
-      cands.push({name:name||'',party:party||'무소속',votes,
-        pct:tv>0?Math.min(100,+(votes/tv*100).toFixed(1)):0});
+      cands.push({name:String(name||'').trim(),party:String(party||'무소속').trim(),
+        votes,pct:+(votes/tv*100).toFixed(1)});
     }
     cands.sort((a,b)=>b.votes-a.votes);
     if(!cands.length)return null;
-    // rate: 없으면 null (100으로 떨어지지 않도록)
-    const rateRaw=row.rateOcr??row.turnout??null;
-    const rate=rateRaw!==null?Math.min(100,Math.max(0,parseFloat(rateRaw))):null;
-    // status 판단
+
+    // 개표율: API 스펙에 개표율 필드 없음 → 투표수/선거인수로 근사 계산
+    // 실제 개표율은 별도 필드 없으므로 null 처리 (집계중으로 표시)
+    // 선거 완료(모든 득표수 합산 = 유효투표수)이면 100%로 처리
+    const totalDugsu=cands.reduce((s,c)=>s+c.votes,0);
+    let rate=null;
+    if(yutusu>0&&totalDugsu>0){
+      if(Math.abs(totalDugsu-yutusu)/yutusu<0.01){
+        rate=100;  // 개표 완료 (득표합계 ≈ 유효투표수)
+      }else{
+        rate=Math.min(99.9,+(totalDugsu/yutusu*100).toFixed(1));
+      }
+    }
     const status=rate===100?'final':rate!==null?'counting':'unknown';
-    return{winner:cands[0].party,rate,status,cands};
+
+    return{winner:cands[0].party,rate,status,cands,
+      meta:{yutusu,tusu,sunsu}};  // 디버그용 원본 데이터
   }finally{
     clearTimeout(timeoutId);
   }
