@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>전국동시지방선거 개표현황 | KBS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
 :root{--bg:#04060e;--panel:#070a14;--border:#10182a;--border2:#1a2540;--text:#c8d2e8;--sub:#6a7a9a;--dim:#323a52;}
@@ -258,7 +257,7 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
 
 <script>
 // ════════════════════════════════════════════
-//  IndexedDB 캐싱 (v6 버전으로 캐시 강제 무효화)
+//  IndexedDB 캐싱 (v7: 스위칭 로직용 강제 캐시 갱신)
 // ════════════════════════════════════════════
 const DB_NAME = 'ElectionMapDB';
 const STORE_NAME = 'geoStore';
@@ -281,8 +280,7 @@ async function saveGeoToCache(year, data) {
   try {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    // 캐시 키 v6로 강제 업데이트
-    tx.objectStore(STORE_NAME).put(data, `geo_cache_v6_${year}`);
+    tx.objectStore(STORE_NAME).put(data, `geo_cache_v7_${year}`);
     return new Promise(res => { tx.oncomplete = () => res(true); tx.onerror = () => res(false); });
   } catch (e) { return false; }
 }
@@ -291,7 +289,7 @@ async function loadGeoFromCache(year) {
   try {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).get(`geo_cache_v6_${year}`);
+    const req = tx.objectStore(STORE_NAME).get(`geo_cache_v7_${year}`);
     return new Promise(res => { req.onsuccess = () => res(req.result); req.onerror = () => res(null); });
   } catch (e) { return null; }
 }
@@ -418,7 +416,7 @@ const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
 
 // ════════════════════════════════════════════
-//  GEO FETCHING & TURF.JS DISSOLVE
+//  GEO FETCHING (고해상도 투트랙 스위칭 방식)
 // ════════════════════════════════════════════
 const GEO_SRCS=[
   {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
@@ -426,7 +424,7 @@ const GEO_SRCS=[
 ];
 async function tryFetch(url){try{const r=await fetch(url);if(r.ok)return await r.json();}catch{}return null;}
 
-// ⚠️ 좌표 반올림 정밀도 1e6으로 상향 (틈새 최소화 보조 조치)
+// 좌표계 정밀도를 1e6(소수점 6자리)으로 높여 미세 오차 방지
 function utmk2wgs(x,y){const a=6378137,e2=0.00669438002290,dx=1000000,dy=2000000,lo=127.5*Math.PI/180,po=38*Math.PI/180;const px=x-dx,py=y-dy;const e4=e2*e2,e6=e4*e2;const M0=a*((1-e2/4-3*e4/64-5*e6/256)*po-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*po)+(15*e4/256+45*e6/1024)*Math.sin(4*po));const M=M0+py;const mu=M/(a*(1-e2/4-3*e4/64-5*e6/256));const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));const p=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1**2/16)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu);const sp=Math.sin(p),cp=Math.cos(p),tp=sp/cp;const N=a/Math.sqrt(1-e2*sp*sp),T=tp*tp,C=e2/(1-e2)*cp*cp;const R=a*(1-e2)/(1-e2*sp*sp)**1.5,D=px/N;const lat=p-(N*tp/R)*(D*D/2-(5+3*T+10*C-4*C*C)*D**4/24+(61+90*T+298*C+45*T*T)*D**6/720);const lon=lo+(D-(1+2*T+C)*D**3/6+(5-2*C+28*T)*D**5/120)/cp;return[Math.round(lon*180/Math.PI*1e6)/1e6,Math.round(lat*180/Math.PI*1e6)/1e6];}
 function convC(c){if(!c)return c;if(typeof c[0]==='number'){const r=utmk2wgs(c[0],c[1]);return r;}return c.map(convC);}
 function needConv(geo){try{let c=geo.features[0]?.geometry?.coordinates;while(Array.isArray(c[0]))c=c[0];return Math.abs(c[0])>500;}catch{return false;}}
@@ -463,6 +461,7 @@ function normGeo(geo){
   })};
 }
 
+// 💡 스위칭 방식 다운로드: 고해상도 시도 + 고해상도 시군구 병렬 다운로드
 async function fetchSGISGeo(targetYear) {
   const loading = document.getElementById('loading-wrap');
   const txt = document.getElementById('loading-txt');
@@ -489,7 +488,7 @@ async function fetchSGISGeo(targetYear) {
     let simplifiedSidoF = null;
     let actualYear = apiYear;
     
-    // 시도 코드를 알아내기 위해 단순 전국 지도를 받아옴 (단순 코드를 얻기 위한 용도)
+    // 단순 지도 (시도 코드 추출용)
     for (let yr = apiYear; yr >= 2010; yr--) {
       const r = await fetch(`${proxy}?url=${encodeURIComponent(bUrl('', 0, yr))}`);
       if (r.ok) {
@@ -503,8 +502,9 @@ async function fetchSGISGeo(targetYear) {
     }
     if (!simplifiedSidoF) throw new Error(`${targetYear}년 지도 데이터 없음`);
     
-    if (txt) txt.textContent = `고해상도 시군구 데이터 250개 병렬 다운로드 중...`;
+    if (txt) txt.textContent = `고해상도 시도 및 시군구 데이터 다운로드 중...`;
     const sggAll = [];
+    const detailedSidoF = [];
     
     async function limitedFetch(tasks, limit) {
       let idx = 0;
@@ -516,6 +516,22 @@ async function fetchSGISGeo(targetYear) {
 
     const fetchTasks = simplifiedSidoF.map(sf => async () => {
       const code = String(sf.properties.adm_cd || '');
+      
+      // 1. 고해상도 시도 (전국 모드용)
+      try {
+        const r1 = await fetch(`${proxy}?url=${encodeURIComponent(bUrl(code, 0, actualYear))}`);
+        if (r1.ok) {
+          const d1 = await r1.json();
+          if (d1.features && d1.features.length > 0) {
+            const feat = d1.features[0];
+            feat.properties.adm_cd = code;
+            feat.properties.adm_nm = sf.properties.adm_nm;
+            detailedSidoF.push(feat);
+          }
+        }
+      } catch(e) {}
+
+      // 2. 고해상도 시군구 (확대 모드용)
       try {
         const r2 = await fetch(`${proxy}?url=${encodeURIComponent(bUrl(code, 1, actualYear))}`);
         if (r2.ok) {
@@ -532,38 +548,20 @@ async function fetchSGISGeo(targetYear) {
 
     await limitedFetch(fetchTasks, 5);
 
-    const sigunguGeo = normGeo(convGeo({ type: 'FeatureCollection', features: sggAll }));
-    
-    const _codeToSido = Object.fromEntries(Object.entries(SIDO_CODE).map(([k,v])=>[v,k]));
-    sigunguGeo.features.forEach(f => {
-        if (!f.properties.sidoName && f.properties.sido) {
-            f.properties.sidoName = SIGUNGU_FILE_CODE[f.properties.sido] || _codeToSido[f.properties.sido] || 'Unknown';
-        }
+    // 고해상도 시도 다운로드가 누락된 곳은 단순 지도로 안전장치 적용
+    const finalSidoF = simplifiedSidoF.map(simpFeat => {
+       const code = simpFeat.properties.adm_cd;
+       const detailedFeat = detailedSidoF.find(f => f.properties.adm_cd === code);
+       return detailedFeat ? detailedFeat : simpFeat;
     });
 
-    if (txt) txt.textContent = `시군구 지도를 병합하여 완벽한 시도 외곽선 생성 중 (약 2~3초)...`;
-    await new Promise(r => setTimeout(r, 100)); 
-
-    let sidoGeo;
-    try {
-        const dissolvedGeo = turf.dissolve(sigunguGeo, {propertyName: 'sidoName'});
-        dissolvedGeo.features.forEach(f => {
-            f.properties.name = f.properties.sidoName;
-            f.properties.adm_nm = f.properties.sidoName;
-            const cd = Object.entries(SIDO_CODE).find(([k,v]) => k === f.properties.sidoName);
-            if(cd) { f.properties.code = cd[1]; f.properties.adm_cd = cd[1]; }
-        });
-        sidoGeo = normGeo(dissolvedGeo);
-        console.log(`[Turf] 시군구 병합 성공: ${sidoGeo.features.length}개 시도 폴리곤 생성`);
-    } catch (e) {
-        console.error("Turf dissolve error:", e);
-        sidoGeo = normGeo(convGeo({ type: 'FeatureCollection', features: simplifiedSidoF }));
-    }
+    const sidoGeo = normGeo(convGeo({ type: 'FeatureCollection', features: finalSidoF }));
+    const sigunguGeo = normGeo(convGeo({ type: 'FeatureCollection', features: sggAll }));
     
     await saveGeoToCache(targetYear, { sido: sidoGeo, sigungu: sigunguGeo, ts: Date.now(), actualYear });
     
     ST.sidoGeo = sidoGeo; ST.sigunguGeo = sigunguGeo; ST.geoLoaded = true;
-    if (st) st.textContent = `✅ ${targetYear}년 수학적 고해상도 지도 갱신 완료`;
+    if (st) st.textContent = `✅ ${targetYear}년 고해상도 지도 다운로드 완료`;
     
     rebuildMap();
   } catch(e) { 
@@ -577,7 +575,7 @@ async function loadGeo(year) {
   const loading = document.getElementById('loading-wrap');
   const txt = document.getElementById('loading-txt');
   loading.style.display = 'flex';
-  txt.textContent = `${year}년 고해상도 캐시 지도 불러오는 중...`;
+  txt.textContent = `${year}년 고해상도 지도 불러오는 중...`;
   
   try {
     const c = await loadGeoFromCache(year);
@@ -609,9 +607,20 @@ async function loadGeo(year) {
 }
 
 // ════════════════════════════════════════════
-//  메인 지도 렌더 (외곽선 겹침 방지 및 실시간 Union 처리 적용)
+//  메인 지도 렌더 (완벽한 스위칭 로직 적용)
 // ════════════════════════════════════════════
 let _proj=null,_path=null,_mapInitialized=false;
+
+function _sidoFill(p){
+  let nm=p.name?normName(p.name):'';
+  if(nm&&ST.data[nm])return pc(ST.data[nm].winner);
+  const sn=extractSidoName(p);
+  if(sn&&ST.data[sn])return pc(ST.data[sn].winner);
+  const raw=normName(getGeoName(p));
+  if(raw&&ST.data[raw])return pc(ST.data[raw].winner);
+  if(raw){const m=SIDO_ALL.find(s=>s===raw||s.includes(raw)||raw.includes(s.replace(/특별시$|광역시$|특별자치시$|특별자치도$/,'')));if(m&&ST.data[m])return pc(ST.data[m].winner);}
+  return '#111a30';
+}
 
 function rebuildMap() {
   _mapInitialized = false;
@@ -637,9 +646,8 @@ function initMapLayers(){
     svg.select('#map-g').attr('transform',ev.transform);
     
     // Zooming stroke-width updates
-    svg.select('#sgg-layer').attr('stroke-width', 0.3 / k);
-    svg.select('#sido-border-layer').attr('stroke-width', 1.2 / k);
-    svg.select('#selected-outline-layer').attr('stroke-width', 1.4 / k);
+    svg.select('#sido-layer').attr('stroke-width', 0.8 / k);
+    svg.select('#sgg-layer').attr('stroke-width', 0.4 / k);
     
     svg.selectAll('.sido-lbl,.sgg-lbl').attr('transform',function(d) {
       try {
@@ -658,16 +666,39 @@ function initMapLayers(){
 
   const g=svg.append('g').attr('id','map-g');
   
-  // ⚠️ 레이어 순서 지정: SGG -> 전국 시도 외곽선 -> 드릴다운용 실시간 외곽선 -> 글자
-  g.append('g').attr('id','sgg-layer').attr('stroke-linejoin', 'round').attr('stroke-width', 0.3);
-  g.append('g').attr('id','sido-border-layer').attr('stroke-linejoin', 'round').attr('stroke-width', 1.2);
-  g.append('g').attr('id','selected-outline-layer').attr('stroke-linejoin', 'round').attr('stroke-width', 1.4);
+  // 💡 심플한 두 레이어: 전국용 시도 레이어 / 확대용 시군구 레이어
+  g.append('g').attr('id','sido-layer').attr('stroke-linejoin', 'round').attr('stroke-width', 0.8).attr('stroke', 'rgba(0,0,0,0.8)');
+  g.append('g').attr('id','sgg-layer').attr('stroke-linejoin', 'round').attr('stroke-width', 0.4).attr('stroke', 'rgba(0,0,0,0.4)');
   g.append('g').attr('id','lbl-layer');
 
   _proj=d3.geoMercator().fitExtent([[18,18],[W-18,H-18]],ST.sidoGeo);
   _path=d3.geoPath().projection(_proj);
 
-  // 1. 전국 250개 시군구를 전부 그림
+  // 1. 전국용 고해상도 시도 (SIDO) 렌더링
+  d3.select('#sido-layer').selectAll('.sido-p')
+    .data(ST.sidoGeo.features).join('path')
+    .attr('class','sido-p')
+    .attr('d',_path)
+    .attr('fill',d=>_sidoFill(d.properties))  
+    .style('cursor','pointer')
+    .on('mouseover',function(ev,d){
+      const nm=getSidoNameFromProps(d.properties);
+      if(!ST.selectedSido)d3.select(this).attr('opacity',.72);
+      showDetail(nm);showMainTooltip(ev,nm,svgEl.clientWidth);
+    })
+    .on('mousemove',ev=>moveTooltip(ev,svgEl.clientWidth))
+    .on('mouseout',function(ev,d){
+      const nm=getSidoNameFromProps(d.properties);
+      if(!ST.selectedSido) d3.select(this).attr('opacity', ST.selectedSido===nm ? 0 : (ST.selectedSido ? ST.bgOpacity : 1));
+      if(!ST.selectedSido||ST.selectedSido!==nm)clearDetail();
+      hideTooltip();
+    })
+    .on('click',(ev,d)=>{
+      const nm=getSidoNameFromProps(d.properties);
+      if(ST.selectedSido===nm) drillUp(); else drillDown(nm);
+    });
+
+  // 2. 확대용 고해상도 시군구 (SGG) 렌더링
   d3.select('#sgg-layer').selectAll('.sgg-path')
     .data(ST.sigunguGeo.features).join('path')
     .attr('class','sgg-path')
@@ -675,35 +706,18 @@ function initMapLayers(){
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
       const sidoName=d.properties._sidoName;
-      if(!ST.selectedSido) {
-        d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity',0.72);
-        showMainTooltip(ev,sidoName,svgEl.clientWidth);
-        showDetail(sidoName);
-      } else {
-        if (sidoName === ST.selectedSido) {
-          d3.select(this).attr('opacity',0.75); 
-          const rawNm=String(d.properties.name||d.properties.adm_nm||d.properties.SIGUNGU_NM||'').trim()||extractSggName(d.properties);
-          const party=d.properties._sggParty||getSggParty(sidoName,rawNm,ST.currentSgId)||null;
-          showSggTooltip(ev,rawNm,party,sidoName);
-        } else {
-          d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity', ST.bgOpacity + 0.2);
-          showMainTooltip(ev,sidoName,svgEl.clientWidth);
-        }
+      if (sidoName === ST.selectedSido) {
+        d3.select(this).attr('opacity',0.75); 
+        const rawNm=String(d.properties.name||d.properties.adm_nm||d.properties.SIGUNGU_NM||'').trim()||extractSggName(d.properties);
+        const party=d.properties._sggParty||getSggParty(sidoName,rawNm,ST.currentSgId)||null;
+        showSggTooltip(ev,rawNm,party,sidoName);
       }
     })
     .on('mousemove',ev=>moveTooltip(ev,svgEl.clientWidth))
     .on('mouseout',function(ev,d){
       const sidoName=d.properties._sidoName;
-      if(!ST.selectedSido) {
-        d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity', 1);
-        clearDetail();
-      } else {
-        if (sidoName === ST.selectedSido) {
-          d3.select(this).attr('opacity', 1);
-        } else {
-          d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity', ST.bgOpacity);
-          clearDetail();
-        }
+      if (sidoName === ST.selectedSido) {
+        d3.select(this).attr('opacity', 1);
       }
       hideTooltip();
     })
@@ -711,15 +725,6 @@ function initMapLayers(){
       const sidoName=d.properties._sidoName;
       if(ST.selectedSido===sidoName) drillUp(); else drillDown(sidoName);
     });
-
-  // 2. 🌟 Turf.js가 만든 무결점 시도 외곽선 렌더링
-  d3.select('#sido-border-layer').selectAll('.sido-border')
-    .data(ST.sidoGeo.features).join('path')
-    .attr('class','sido-border')
-    .attr('d',_path)
-    .attr('fill','none')
-    .attr('stroke','rgba(0,0,0,0.8)') // 굵고 명확한 시도 외곽선
-    .attr('pointer-events','none');
 
   // 3. 레이블 (Sido)
   d3.select('#lbl-layer').selectAll('.sido-lbl')
@@ -756,85 +761,50 @@ function initMapLayers(){
   updateMapColors();
 }
 
-// ⚠️ 추가됨: 드릴다운 시 선택된 시도의 외곽선을 시군구 데이터 기반으로 Turf를 사용해 즉석에서 그림
-function renderSelectedOutline() {
-  const layer = d3.select('#selected-outline-layer');
-  layer.selectAll('*').remove();
-
-  if (!ST.selectedSido || !ST.sigunguGeo) return;
-
-  const feats = ST.sigunguGeo.features.filter(
-    f => f.properties._sidoName === ST.selectedSido
-  );
-  if (!feats.length) return;
-
-  try {
-    let merged = feats[0];
-    for (let i = 1; i < feats.length; i++) {
-      merged = turf.union(merged, feats[i]) || merged;
-    }
-
-    layer.append('path')
-      .datum(merged)
-      .attr('class', 'selected-outline')
-      .attr('d', _path)
-      .attr('fill', 'none')
-      .attr('stroke', 'rgba(0,0,0,0.85)') // 드릴다운용 매우 선명한 검은 외곽선
-      .attr('pointer-events', 'none');
-  } catch(e) {
-    console.warn('selected outline merge failed', e);
-  }
-}
-
 function updateMapColors(){
   if(!_mapInitialized)return;
-  
-  d3.selectAll('.sgg-path')
-    .attr('fill', d => {
-      const sidoName = d.properties._sidoName;
-      if (!ST.selectedSido) {
-         const sido = ST.data[sidoName];
-         return sido ? pc(sido.winner) : '#111a30';
-      } else {
-         if (sidoName === ST.selectedSido) {
-            if (d.properties._sggColor && d.properties._sggColor !== '#1a2030') return d.properties._sggColor;
-            const rawNm = String(d.properties.name || d.properties.adm_nm || d.properties.SIGUNGU_NM || '').trim() || extractSggName(d.properties);
-            const party = getSggParty(sidoName, rawNm, ST.currentSgId);
-            if (party) return pc(party);
-            const sido = ST.data[sidoName];
-            return sido ? pc(sido.winner) + '44' : '#1a2030';
-         } else {
-            const sido = ST.data[sidoName];
-            return sido ? pc(sido.winner) : '#111a30';
-         }
-      }
+
+  // 💡 1. SIDO 레이어 (전국 지도 제어)
+  d3.selectAll('.sido-p')
+    .style('display', d => {
+       const sidoName = getSidoNameFromProps(d.properties);
+       // 확대된 시도는 외곽선 덩어리를 아예 없앰 (대신 그 자리에 SGG 조각들이 켜짐)
+       if (ST.selectedSido && sidoName === ST.selectedSido) return 'none'; 
+       return 'block';
     })
-    .attr('stroke', d => {
-      const sidoName = d.properties._sidoName;
-      if (!ST.selectedSido) {
-         return 'rgba(0,0,0,0.15)'; 
-      } else {
-         if (sidoName === ST.selectedSido) return 'rgba(0,0,0,0.4)'; 
-         else return 'rgba(0,0,0,0.1)';
-      }
-    })
+    .attr('fill', d => _sidoFill(d.properties))
     .attr('opacity', d => {
-      if (ST.selectedSido && d.properties._sidoName !== ST.selectedSido) return ST.bgOpacity;
-      return 1;
+       const sidoName = getSidoNameFromProps(d.properties);
+       if (ST.selectedSido && sidoName !== ST.selectedSido) return ST.bgOpacity; // 다른 시도는 흐리게
+       return 1;
     });
 
-  // ⚠️ 줌인 시 전국 모드용 SIDO 테두리를 완전히 끔
-  d3.selectAll('.sido-border').attr('opacity', d => {
-     return ST.selectedSido ? 0 : 1; 
-  });
+  // 💡 2. SGG 레이어 (확대 지도 제어)
+  d3.selectAll('.sgg-path')
+    .style('display', d => {
+       // 오직 확대(선택)된 시도의 시군구 조각들만 켬
+       if (ST.selectedSido && d.properties._sidoName === ST.selectedSido) return 'block';
+       return 'none';
+    })
+    .attr('fill', d => {
+       const sidoName = d.properties._sidoName;
+       if (d.properties._sggColor && d.properties._sggColor !== '#1a2030') return d.properties._sggColor;
+       const rawNm = String(d.properties.name || d.properties.adm_nm || d.properties.SIGUNGU_NM || '').trim() || extractSggName(d.properties);
+       const party = getSggParty(sidoName, rawNm, ST.currentSgId);
+       if (party) return pc(party);
+       const sido = ST.data[sidoName];
+       return sido ? pc(sido.winner) + '44' : '#1a2030';
+    })
+    .attr('opacity', 1);
 
-  d3.selectAll('.sido-lbl').attr('opacity', d => {
-    if (!ST.showLabels) return 0;
-    return ST.selectedSido ? 0 : 1;
-  });
-
-  d3.selectAll('.sgg-lbl').attr('opacity', d => {
-    if (!ST.showLabels) return 0;
+  // 💡 3. 라벨 제어
+  d3.selectAll('.sido-lbl').style('display', ST.selectedSido ? 'none' : (ST.showLabels ? 'block' : 'none'));
+  
+  d3.selectAll('.sgg-lbl').style('display', d => {
+    if (!ST.showLabels) return 'none';
+    return (ST.selectedSido && d.properties._sidoName === ST.selectedSido) ? 'block' : 'none';
+  })
+  .attr('opacity', d => {
     return (ST.selectedSido && d.properties._sidoName === ST.selectedSido) ? 1 : 0;
   });
   
@@ -849,11 +819,8 @@ function resizeMap(){
   _proj=d3.geoMercator().fitExtent([[18,18],[W-18,H-18]],ST.sidoGeo);
   _path=d3.geoPath().projection(_proj);
   
+  d3.selectAll('.sido-p').attr('d', _path);
   d3.selectAll('.sgg-path').attr('d', _path);
-  d3.selectAll('.sido-border').attr('d', _path);
-  
-  // 리사이즈 시 실시간 외곽선 재계산
-  renderSelectedOutline();
   
   d3.selectAll('.sido-lbl').attr('transform',function(d){
       const ct=_path.centroid(d);
@@ -876,10 +843,7 @@ function drillDown(sidoName){
   document.getElementById('drill-nav').style.display='block';
   document.getElementById('opacity-row').style.display='flex';
 
-  updateMapColors();
-  
-  // ⚠️ 드릴다운 시 선택된 시도의 외곽선을 동적으로 생성하여 렌더링
-  renderSelectedOutline();
+  updateMapColors(); // 여기서 SIDO와 SGG 스위칭이 완벽하게 일어납니다.
 
   const t=_zoomToSido(sidoName);
   if(t)d3.select('#map-svg').transition().duration(650).call(ST.zoomBehavior.transform,t);
@@ -914,9 +878,6 @@ function drillUp(){
   
   updateMapColors();
   
-  // ⚠️ 드릴업 시 외곽선 지우기
-  renderSelectedOutline();
-  
   if(ST.zoomBehavior){
     d3.select('#map-svg').transition().duration(600).call(ST.zoomBehavior.transform,d3.zoomIdentity);
   }
@@ -925,7 +886,7 @@ function drillUp(){
   renderList();
 }
 
-function changeMapOpacity(val) {
+function changeBgOpacity(val) {
   ST.bgOpacity = parseFloat(val);
   updateMapColors();
 }
@@ -1125,17 +1086,18 @@ function exportMapPNG(withLabels){
     g.setAttribute('transform',`translate(${t.x},${t.y}) scale(${t.k})`);
     
     const sggL = clone.querySelector('#sgg-layer');
-    if (sggL) sggL.setAttribute('stroke-width', 0.3 / t.k);
-    const sidoL = clone.querySelector('#sido-border-layer');
-    if (sidoL) sidoL.setAttribute('stroke-width', 1.2 / t.k);
-    const outL = clone.querySelector('#selected-outline-layer');
-    if (outL) outL.setAttribute('stroke-width', 1.4 / t.k);
+    if (sggL) sggL.setAttribute('stroke-width', 0.4 / t.k);
+    const sidoL = clone.querySelector('#sido-layer');
+    if (sidoL) sidoL.setAttribute('stroke-width', 0.8 / t.k);
     
     clone.querySelectorAll('.sido-lbl,.sgg-lbl').forEach(txt=>{
       const fs=parseFloat(txt.getAttribute('font-size')||'11');
       txt.setAttribute('font-size',Math.max(3,fs/t.k));
     });
   }
+
+  // 화면에서 숨겨진 요소들(display: none)은 내보내기 전에 완전히 제거하여 깔끔하게 만듭니다.
+  clone.querySelectorAll('[style*="display: none"]').forEach(e => e.remove());
 
   if(!withLabels) clone.querySelectorAll('.sido-lbl,.sgg-lbl').forEach(e=>e.remove());
   else clone.querySelectorAll('text').forEach(t=>t.setAttribute('font-family',"Pretendard,'Apple SD Gothic Neo','Malgun Gothic','나눔고딕',sans-serif"));
