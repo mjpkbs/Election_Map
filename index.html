@@ -1317,8 +1317,10 @@ async function fetchOneSido(sgId,nm){
   let rate=null;
   let uncontested=false;
 
-  // 무투표 당선: 후보 1명이고 득표수가 0 (투표 자체가 없었음)
-  if(cands.length===1 && totalDugsu===0 && yutusu===0 && tusu===0){
+  // 무투표 당선: 후보 1명이고 총 득표수가 0
+  // yutusu/tusu 조건 제거 — 선관위 API는 sunsu(선거인수)만 있고
+  // yutusu/tusu가 0이 아닌 값으로 오는 케이스가 있음
+  if(cands.length===1 && totalDugsu===0){
     uncontested=true;
     rate=100;
   } else if(yutusu>0&&totalDugsu>0){
@@ -1433,8 +1435,9 @@ async function fetchSggBySido(sgId,sidoNm){
       const rawYutusu = parseInt(row.yutusu||0);
       const rawTusu   = parseInt(row.tusu||0);
 
-      // 무투표 당선: 후보 1명 + 득표수 0
-      const isUncontested = cands.length===1 && totalV===0 && rawYutusu===0 && rawTusu===0;
+      // 무투표 당선: 후보 1명 + 총 득표수 0
+      // yutusu/tusu 조건 제거 (API 응답 케이스 다양)
+      const isUncontested = cands.length===1 && totalV===0;
 
       let sggRate = null;
       if(isUncontested){
