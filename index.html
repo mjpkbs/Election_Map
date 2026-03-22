@@ -236,7 +236,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div class="m-group">
       <label class="m-lbl">CORS 프록시 URL <span style="color:var(--sub);font-size:10px">(VWorld 도메인 미등록 시 필요)</span></label>
       <input class="m-input" id="in-proxy" placeholder="https://your-worker.workers.dev">
-      <div class="m-hint">SGIS + 선관위 API 모두 이 프록시 사용 · worker.js에 api.vworld.kr 허용 추가 필요</div>
+      <div class="m-hint">SGIS API 프록시로 사용 · 선관위 API는 프록시 없이도 직접 호출 가능 · VWorld는 JSONP 방식으로 프록시 불필요</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
       <button class="btn-sm" id="btn-vworld" onclick="loadVWorldGeo()">🗺 VWorld 지도 갱신</button>
@@ -565,27 +565,54 @@ const GEO_SRCS=[
 ];
 async function tryFetch(url){try{const r=await fetch(url);if(r.ok)return await r.json();}catch{}return null;}
 
-// ─── VWorld 2D Data API ────────────────────────────
-// 시도: LT_C_ADSIDO_INFO (ctp_kor_nm, ctprvn_cd)
-// 시군구: LT_C_ADSIGG_INFO (sig_kor_nm, sig_cd)
-// 응답: res.response.result.featureCollection
-async function fetchVWorldLayer(layerName,size=1000){
-  const key=ST.vworldKey;
-  const proxy=ST.proxyUrl;
-  if(!key)throw new Error('VWorld API Key 없음');
-  const url=`https://api.vworld.kr/req/data?service=data&request=GetFeature`+
-    `&data=${layerName}&crs=EPSG:4326&format=json&size=${size}&page=1&key=${encodeURIComponent(key)}`;
-  let res;
-  if(proxy){
-    res=await fetch(proxy.replace(/\/$/,'')+`?url=${encodeURIComponent(url)}`);
-  }else{
-    // 프록시 없을 때 직접 시도 (같은 도메인이거나 CORS 허용 시)
-    res=await fetch(url);
-  }
-  if(!res.ok)throw new Error(`VWorld HTTP ${res.status}`);
-  const json=await res.json();
-  if(json.response?.status!=='OK')throw new Error(`VWorld: ${json.response?.status||'오류'}`);
-  return json.response.result.featureCollection;
+// ─── VWorld 2D Data API (JSONP 방식 — CORS 프록시 불필요) ────
+// VWorld 공식 권장: CORS 오류 발생 시 dataType=JSONP 사용
+// 시도: LT_C_ADSIDO_INFO / 시군구: LT_C_ADSIGG_INFO
+function fetchVWorldLayer(layerName, size=1000){
+  return new Promise((resolve, reject)=>{
+    const key=ST.vworldKey;
+    if(!key){reject(new Error('VWorld API Key 없음'));return;}
+
+    // JSONP 콜백 함수명 (중복 방지)
+    const cbName='_vwCb_'+layerName.replace(/[^a-z]/gi,'_')+'_'+Date.now();
+
+    // 타임아웃 (15초)
+    const timer=setTimeout(()=>{
+      cleanup();
+      reject(new Error('VWorld 응답 시간 초과 (15초)'));
+    },15000);
+
+    function cleanup(){
+      clearTimeout(timer);
+      delete window[cbName];
+      const s=document.getElementById(cbName);
+      if(s)s.remove();
+    }
+
+    // JSONP 콜백 등록
+    window[cbName]=function(json){
+      cleanup();
+      if(json?.response?.status!=='OK'){
+        reject(new Error('VWorld: '+(json?.response?.status||'오류')));
+        return;
+      }
+      resolve(json.response.result.featureCollection);
+    };
+
+    // JSONP 스크립트 태그 삽입
+    const url=`https://api.vworld.kr/req/data?service=data&request=GetFeature`+
+      `&data=${layerName}&crs=EPSG:4326&format=json&size=${size}&page=1`+
+      `&key=${encodeURIComponent(key)}&callback=${cbName}&domain=${encodeURIComponent(location.origin)}`;
+
+    const script=document.createElement('script');
+    script.id=cbName;
+    script.src=url;
+    script.onerror=()=>{
+      cleanup();
+      reject(new Error('VWorld 스크립트 로드 실패 (네트워크 오류)'));
+    };
+    document.head.appendChild(script);
+  });
 }
 
 async function loadVWorldGeo(){
@@ -1455,7 +1482,7 @@ function updateHeader(){
   document.getElementById('hd-year').textContent=`${el.year} 개표현황`;
   document.getElementById('header-sub').textContent=`${el.round} · ${el.date} · 광역단체장(시·도지사)`;
   document.getElementById('btn-live').style.display=isUpcoming()?'block':'none';
-  document.getElementById('btn-fetch').style.display=(!isUpcoming()&&ST.apiKey&&ST.proxyUrl)?'block':'none';
+  document.getElementById('btn-fetch').style.display=(!isUpcoming()&&ST.apiKey)?'block':'none';
   const b=document.getElementById('data-src-badge');
   b.className=ST.dataSource;
   b.textContent=ST.dataSource==='builtin'?'내장 확정 데이터':ST.dataSource==='api'?'선관위 API':'MOCK 데이터';
@@ -1475,17 +1502,54 @@ function toggleLive(){
 }
 function stopPolling(){if(ST.pollTimer){clearInterval(ST.pollTimer);ST.pollTimer=null;}}
 async function poll(){
-  if(ST.mode==='mock'){let ch=false;SIDO_ALL.forEach(k=>{const d=ST.data[k];if(d&&d.rate<100){d.rate=Math.min(100,+(d.rate+Math.random()*2.5).toFixed(1));ch=true;}});if(ch)renderAll();}
-  else await fetchAllSidoAPI(ST.currentSgId);
+  if(ST.mode==='mock'){
+    // mock 모드: 개표율 시뮬레이션
+    let ch=false;
+    SIDO_ALL.forEach(k=>{
+      const d=ST.data[k];
+      if(d&&(d.rate==null||d.rate<100)){
+        d.rate=Math.min(100,+((d.rate||0)+Math.random()*3.5).toFixed(1));
+        d.status=d.rate>=100?'final':'counting';
+        ch=true;
+      }
+    });
+    if(ch){updateMapColors();renderSummaryBar();renderList();}
+  }else{
+    // real 모드: 선관위 API
+    if(!ST.apiKey){
+      console.warn('[poll] 선관위 API 키 없음 — 설정에서 입력 필요');
+      return;
+    }
+    await fetchAllSidoAPI(ST.currentSgId);
+  }
 }
 
 // ════════════════════════════════════════════
 //  선관위 API
 // ════════════════════════════════════════════
 async function fetchHistorical(){
-  if(!ST.apiKey||!ST.proxyUrl){alert('설정에서 API Key와 프록시를 입력하세요');openSettings();return;}
+  if(!ST.apiKey){alert('설정에서 선관위 API Key를 입력하세요');openSettings();return;}
   const btn=document.getElementById('btn-fetch');btn.textContent='...';btn.disabled=true;
-  try{await fetchAllSidoAPI(ST.currentSgId);ST.dataSource='api';updateHeader();}finally{btn.textContent='↻ API';btn.disabled=false;}
+  try{
+    await fetchAllSidoAPI(ST.currentSgId);
+    ST.dataSource='api';
+    updateHeader();
+  }finally{
+    btn.textContent='↻ API';btn.disabled=false;
+  }
+}
+
+// 2026 선거 당일 자동 API 폴링 시작
+function startElectionDayAPI(){
+  if(!isUpcoming()||ST.mode!=='real'||!ST.apiKey)return;
+  // 선거 당일(2026-06-03) 오후 6시 이후만 자동 시작
+  const now=new Date();
+  const elDay=new Date('2026-06-03T18:00:00+09:00');
+  if(now >= elDay && !ST.isLive){
+    console.log('[선거당일] 자동 실시간 모드 시작');
+    ST.mode='real';
+    toggleLive();
+  }
 }
 async function fetchAllSidoAPI(sgId){
   const errEl=document.getElementById('err-msg');
@@ -1539,13 +1603,16 @@ async function fetchAllSidoAPI(sgId){
 
 async function fetchOneSido(sgId,nm){
   const controller=new AbortController();
-  const timeoutId=setTimeout(()=>controller.abort(),8000); // 8초 timeout
+  const timeoutId=setTimeout(()=>controller.abort(),10000); // 10초 timeout
   try{
-    const url=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
+    const necUrl=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
       +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=3`
       +`&sdName=${encodeURIComponent(nm)}&numOfRows=50&pageNo=1&resultType=json`;
-    const r=await fetch(ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(url)}`,
-      {signal:controller.signal});
+    // 프록시가 있으면 프록시 경유, 없으면 직접 시도
+    const url=ST.proxyUrl
+      ? ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`
+      : necUrl;
+    const r=await fetch(url,{signal:controller.signal});
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const j=await r.json();
     const items=j?.response?.body?.items?.item??j?.body?.items?.item;
@@ -1652,6 +1719,8 @@ ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
 ST.mode=localStorage.getItem('el_mode')||'mock';
 ST.pollSec=parseInt(localStorage.getItem('el_poll')||'30');
 renderTabs();updateHeader();loadGeo();
+// 2026 선거 당일 자동 시작 체크 (1분 후 — 페이지 로드 완료 후)
+setTimeout(startElectionDayAPI, 60000);
 </script>
 </body>
 </html>
