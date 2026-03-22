@@ -299,6 +299,20 @@ const ELECTIONS=[{sgId:'20260603',round:'제9회',year:2026,date:'2026.06.03',st
 const D_SIDO={};   // API 로드 전 빈 상태
 const D_SGG={};    // API 로드 전 빈 상태
 
+// Feature properties에서 정규화된 시도명 추출
+function getSidoNameFromProps(p){
+  if(!p)return '';
+  // normGeo가 주입한 name 필드 (가장 신뢰도 높음)
+  if(p.name){const n=normName(p.name);if(SIDO_ALL.includes(n))return n;}
+  // SIDO_NM 직접
+  if(p.SIDO_NM){const n=normName(String(p.SIDO_NM).trim());if(n)return n;}
+  // extractSidoName 활용
+  const sn=extractSidoName(p);
+  if(sn)return sn;
+  // getGeoName fallback
+  return normName(getGeoName(p))||'';
+}
+
 const SIDO_ALL=['서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시','세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도','경상북도','경상남도','제주특별자치도'];
 const SIDO_CODE={'서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28','광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36','경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44','전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50'};
 
@@ -435,49 +449,38 @@ async function tryFetch(url){try{const r=await fetch(url);if(r.ok)return await r
 // ─── VWorld 2D Data API (JSONP 방식 — CORS 프록시 불필요) ────
 // VWorld 공식 권장: CORS 오류 발생 시 dataType=JSONP 사용
 // 시도: LT_C_ADSIDO_INFO / 시군구: LT_C_ADSIGG_INFO
-function fetchVWorldLayer(layerName, size=1000){
+async function fetchVWorldLayer(layerName, size=1000){
+  const key=ST.vworldKey;
+  if(!key)throw new Error('VWorld API Key 없음');
+  const proxy=ST.proxyUrl;
+
+  const baseUrl=`https://api.vworld.kr/req/data?service=data&request=GetFeature`+
+    `&data=${layerName}&crs=EPSG:4326&format=json&size=${size}&page=1`+
+    `&key=${encodeURIComponent(key)}&domain=${encodeURIComponent(location.origin)}`;
+
+  // 1순위: 프록시가 있으면 프록시로 JSON 직접 호출 (가장 안정적)
+  if(proxy){
+    const r=await fetch(proxy.replace(/\/$/,'')+`?url=${encodeURIComponent(baseUrl)}`);
+    if(!r.ok)throw new Error(`VWorld HTTP ${r.status}`);
+    const json=await r.json();
+    if(json?.response?.status!=='OK')throw new Error(`VWorld: ${json?.response?.status||'오류'}`);
+    return json.response.result.featureCollection;
+  }
+
+  // 2순위: 프록시 없으면 JSONP 시도
   return new Promise((resolve, reject)=>{
-    const key=ST.vworldKey;
-    if(!key){reject(new Error('VWorld API Key 없음'));return;}
-
-    // JSONP 콜백 함수명 (중복 방지)
     const cbName='_vwCb_'+layerName.replace(/[^a-z]/gi,'_')+'_'+Date.now();
-
-    // 타임아웃 (15초)
-    const timer=setTimeout(()=>{
-      cleanup();
-      reject(new Error('VWorld 응답 시간 초과 (15초)'));
-    },15000);
-
-    function cleanup(){
-      clearTimeout(timer);
-      delete window[cbName];
-      const s=document.getElementById(cbName);
-      if(s)s.remove();
-    }
-
-    // JSONP 콜백 등록
+    const timer=setTimeout(()=>{cleanup();reject(new Error('VWorld 응답 시간 초과 (10초) — ⚙ 설정에서 프록시 URL을 입력하면 더 빠릅니다'));},10000);
+    function cleanup(){clearTimeout(timer);delete window[cbName];document.getElementById(cbName)?.remove();}
     window[cbName]=function(json){
       cleanup();
-      if(json?.response?.status!=='OK'){
-        reject(new Error('VWorld: '+(json?.response?.status||'오류')));
-        return;
-      }
+      if(json?.response?.status!=='OK'){reject(new Error('VWorld: '+(json?.response?.status||'오류')));return;}
       resolve(json.response.result.featureCollection);
     };
-
-    // JSONP 스크립트 태그 삽입
-    const url=`https://api.vworld.kr/req/data?service=data&request=GetFeature`+
-      `&data=${layerName}&crs=EPSG:4326&format=json&size=${size}&page=1`+
-      `&key=${encodeURIComponent(key)}&callback=${cbName}&domain=${encodeURIComponent(location.origin)}`;
-
+    const url=baseUrl+`&callback=${cbName}`;
     const script=document.createElement('script');
-    script.id=cbName;
-    script.src=url;
-    script.onerror=()=>{
-      cleanup();
-      reject(new Error('VWorld 스크립트 로드 실패 (네트워크 오류)'));
-    };
+    script.id=cbName;script.src=url;
+    script.onerror=()=>{cleanup();reject(new Error('VWorld JSONP 로드 실패'));};
     document.head.appendChild(script);
   });
 }
@@ -715,7 +718,11 @@ async function _loadSgisGeoAuto(){
   const ad=await ar.json();
   if(ad.errCd!==0)throw new Error(`SGIS 인증 실패: ${ad.errMsg}`);
   const token=ad.result.accessToken;
-  const bUrl=(adm,ls,yr)=>`https://sgisapi.mods.go.kr/OpenAPI3/boundary/hadmarea.geojson?accessToken=${encodeURIComponent(token)}&year=${yr}&adm_cd=${encodeURIComponent(adm)}&low_search=${ls}`;
+  const bUrl=(adm,ls,yr)=>{
+    // adm_cd가 빈 값이면 파라미터 생략 (빈 값 전송 시 422 오류 발생)
+    const admParam=adm?`&adm_cd=${encodeURIComponent(adm)}`:'';
+    return `https://sgisapi.mods.go.kr/OpenAPI3/boundary/hadmarea.geojson?accessToken=${encodeURIComponent(token)}&year=${yr}${admParam}&low_search=${ls}`;
+  };
   let sidoF=null;
   for(const yr of['2024','2023','2022','2021']){
     const r=await fetch(`${proxy}?url=${encodeURIComponent(bUrl('',0,yr))}`);
@@ -758,7 +765,11 @@ async function fetchSGISGeo(){
     const token=ad.result.accessToken;
     st.textContent='시도 경계 다운로드 중...';
 
-    const bUrl=(adm,ls,yr)=>`https://sgisapi.mods.go.kr/OpenAPI3/boundary/hadmarea.geojson?accessToken=${encodeURIComponent(token)}&year=${yr}&adm_cd=${encodeURIComponent(adm)}&low_search=${ls}`;
+    const bUrl=(adm,ls,yr)=>{
+    // adm_cd가 빈 값이면 파라미터 생략 (빈 값 전송 시 422 오류 발생)
+    const admParam=adm?`&adm_cd=${encodeURIComponent(adm)}`:'';
+    return `https://sgisapi.mods.go.kr/OpenAPI3/boundary/hadmarea.geojson?accessToken=${encodeURIComponent(token)}&year=${yr}${admParam}&low_search=${ls}`;
+  };
     let sidoF=null;
     for(const yr of['2024','2023','2022','2021']){
       const r=await fetch(`${proxy}?url=${encodeURIComponent(bUrl('',0,yr))}`);
