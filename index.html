@@ -439,6 +439,10 @@ function getSidoNameFromProps(p){
 }
 const SIDO_ALL=['서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시','세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도','경상북도','경상남도','제주특별자치도'];
 const SIDO_CODE={'서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28','광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36','경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44','전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50'};
+
+// 로컬 sigungu.geojson의 SIGUNGU_CD 앞 2자리 → 시도명 매핑
+// (파일이 구형 행정코드 체계를 사용: 11=서울, 21=부산, 22=대구 ... 39=제주)
+const SIGUNGU_FILE_CODE={'11':'서울특별시','21':'부산광역시','22':'대구광역시','23':'인천광역시','24':'광주광역시','25':'대전광역시','26':'울산광역시','29':'세종특별자치시','31':'경기도','32':'강원특별자치도','33':'충청북도','34':'충청남도','35':'전북특별자치도','36':'전라남도','37':'경상북도','38':'경상남도','39':'제주특별자치도'};
 const NO_SGG=['세종특별자치시','제주특별자치도']; // 기초단체장 없음
 
 // gadm 영어명 → 한국어 변환
@@ -504,10 +508,14 @@ function preprocessSggColors(sgId){
     }
     if(!sidoName){
       const cd=String(p.SIGUNGU_CD||p.sig_cd||p.code||getGeoCode(p)||'');
-      if(cd.length>=2)sidoName=codeToSido[cd.slice(0,2)]||null;
+      if(cd.length>=2){
+        const prefix=cd.slice(0,2);
+        sidoName=SIGUNGU_FILE_CODE[prefix]||codeToSido[prefix]||null;
+      }
     }
     if(!sidoName&&p.sido){
-      sidoName=codeToSido[String(p.sido)]||null;
+      const sp=String(p.sido);
+      sidoName=SIGUNGU_FILE_CODE[sp]||codeToSido[sp]||null;
     }
     // 시도명을 찾았으면 _sidoName에 저장 (이후 필터에서 재사용)
     if(sidoName)p._sidoName=sidoName;
@@ -686,15 +694,16 @@ function normGeo(geo){
       // sido 코드 (앞 2자리)
       const _sido=sigCd.length>=2?sigCd.slice(0,2):(p.sido||'');
 
-      // sidoName — SIDO_CODE 역방향으로 계산
+      // sidoName 계산 — SIGUNGU_FILE_CODE(구형) → SIDO_CODE 역방향(현행) 순으로 시도
       const _codeToSido=Object.fromEntries(Object.entries(SIDO_CODE).map(([k,v])=>[v,k]));
       const _sidoName=
         (p.SIDO_NM?normName(String(p.SIDO_NM).trim()):null)||
         (p.NM_SIDO?normName(String(p.NM_SIDO).trim()):null)||
-        _codeToSido[_sido]||
+        SIGUNGU_FILE_CODE[_sido]||   // 구형 코드 체계 (21=부산 등)
+        _codeToSido[_sido]||          // 현행 코드 체계 (26=부산 등)
         null;
 
-      // return에서 명시적으로 추가 (변수 mutation에 의존하지 않음)
+      // return에서 명시적으로 추가
       const code=getGeoCode(p);
       return{...f,properties:{...p,name:nm,code,sido:_sido,sidoName:_sidoName}};
 
@@ -1044,26 +1053,36 @@ function _renderSggLayer(g, sidoName){
     '| 총 시군구:',ST.sigunguGeo.features.length,
     '| 첫번째 feature:', JSON.stringify(first));
 
-  // ── 매칭: 4가지 방법을 모두 시도 ──────────────────────────
   const sggFeatures=ST.sigunguGeo.features.filter(f=>{
     const p=f.properties;
 
-    // 방법1: SIGUNGU_CD (string/number 양쪽) 앞 2자리
-    const cd=String(p.SIGUNGU_CD||p.SIGUNGU_cd||'');
-    if(cd.length>=2&&cd.substring(0,2)===code)return true;
+    // ① normGeo가 계산한 sidoName (SIGUNGU_FILE_CODE 기반 — 가장 확실)
+    if(p.sidoName===sidoName)return true;
+    if(p._sidoName===sidoName)return true;
 
-    // 방법2: code 필드 (normGeo 주입) 앞 2자리
-    const pCode=String(p.code||'');
-    if(pCode.length>=2&&pCode.substring(0,2)===code)return true;
+    // ② SIGUNGU_CD 앞 2자리 → SIGUNGU_FILE_CODE(구형 11~39) 역방향 매핑
+    const cd=String(p.SIGUNGU_CD||p.code||'');
+    if(cd.length>=2){
+      const prefix=cd.slice(0,2);
+      if(SIGUNGU_FILE_CODE[prefix]===sidoName)return true;
+      // 현행 코드(41~50)도 시도
+      const m=Object.entries(SIDO_CODE).find(([,v])=>v===prefix);
+      if(m&&m[0]===sidoName)return true;
+    }
 
-    // 방법3: sido 코드 필드 정확히 일치
-    if(String(p.sido||'')===code)return true;
+    // ③ sido 필드 → SIGUNGU_FILE_CODE
+    const sp=String(p.sido||'');
+    if(sp){
+      if(SIGUNGU_FILE_CODE[sp]===sidoName)return true;
+      const m=Object.entries(SIDO_CODE).find(([,v])=>v===sp);
+      if(m&&m[0]===sidoName)return true;
+    }
 
-    // 방법4: 이름 기반 (SIDO_NM, sidoName, _sidoName)
-    const sn=String(p.SIDO_NM||p.sidoName||p._sidoName||p.NM_SIDO||'').trim();
-    if(sn&&normName(sn)===sidoName)return true;
+    // ④ SIDO_NM 직접 (VWorld/SGIS)
+    const sNm=String(p.SIDO_NM||p.NM_SIDO||'').trim();
+    if(sNm&&normName(sNm)===sidoName)return true;
 
-    // 방법5: full_nm, NAME_1 (VWorld/GADM)
+    // ⑤ full_nm (VWorld: "서울특별시 종로구"), NAME_1 (GADM)
     const full=String(p.full_nm||'').trim();
     if(full&&full.startsWith(sidoName))return true;
     const n1=String(p.NAME_1||'').trim();
