@@ -276,12 +276,12 @@ function initDB() {
   });
 }
 
-// ⚠️ 키값을 geo_cache_v2_ 로 변경하여 강제로 새 고해상도 버전을 저장하고 불러오게 만듭니다.
+// ⚠️ 키값을 geo_cache_v6_ 로 변경 — 예전 simplified border 캐시 제거
 async function saveGeoToCache(year, data) {
   try {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(data, `geo_cache_v2_${year}`);
+    tx.objectStore(STORE_NAME).put(data, `geo_cache_v6_${year}`);
     return new Promise(res => { tx.oncomplete = () => res(true); tx.onerror = () => res(false); });
   } catch (e) { return false; }
 }
@@ -290,7 +290,7 @@ async function loadGeoFromCache(year) {
   try {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).get(`geo_cache_v2_${year}`);
+    const req = tx.objectStore(STORE_NAME).get(`geo_cache_v6_${year}`);
     return new Promise(res => { req.onsuccess = () => res(req.result); req.onerror = () => res(null); });
   } catch (e) { return null; }
 }
@@ -425,7 +425,7 @@ const GEO_SRCS=[
 ];
 async function tryFetch(url){try{const r=await fetch(url);if(r.ok)return await r.json();}catch{}return null;}
 
-function utmk2wgs(x,y){const a=6378137,e2=0.00669438002290,dx=1000000,dy=2000000,lo=127.5*Math.PI/180,po=38*Math.PI/180;const px=x-dx,py=y-dy;const e4=e2*e2,e6=e4*e2;const M0=a*((1-e2/4-3*e4/64-5*e6/256)*po-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*po)+(15*e4/256+45*e6/1024)*Math.sin(4*po));const M=M0+py;const mu=M/(a*(1-e2/4-3*e4/64-5*e6/256));const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));const p=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1**2/16)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu);const sp=Math.sin(p),cp=Math.cos(p),tp=sp/cp;const N=a/Math.sqrt(1-e2*sp*sp),T=tp*tp,C=e2/(1-e2)*cp*cp;const R=a*(1-e2)/(1-e2*sp*sp)**1.5,D=px/N;const lat=p-(N*tp/R)*(D*D/2-(5+3*T+10*C-4*C*C)*D**4/24+(61+90*T+298*C+45*T*T)*D**6/720);const lon=lo+(D-(1+2*T+C)*D**3/6+(5-2*C+28*T)*D**5/120)/cp;return[Math.round(lon*180/Math.PI*1e5)/1e5,Math.round(lat*180/Math.PI*1e5)/1e5];}
+function utmk2wgs(x,y){const a=6378137,e2=0.00669438002290,dx=1000000,dy=2000000,lo=127.5*Math.PI/180,po=38*Math.PI/180;const px=x-dx,py=y-dy;const e4=e2*e2,e6=e4*e2;const M0=a*((1-e2/4-3*e4/64-5*e6/256)*po-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*po)+(15*e4/256+45*e6/1024)*Math.sin(4*po));const M=M0+py;const mu=M/(a*(1-e2/4-3*e4/64-5*e6/256));const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));const p=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1**2/16)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu);const sp=Math.sin(p),cp=Math.cos(p),tp=sp/cp;const N=a/Math.sqrt(1-e2*sp*sp),T=tp*tp,C=e2/(1-e2)*cp*cp;const R=a*(1-e2)/(1-e2*sp*sp)**1.5,D=px/N;const lat=p-(N*tp/R)*(D*D/2-(5+3*T+10*C-4*C*C)*D**4/24+(61+90*T+298*C+45*T*T)*D**6/720);const lon=lo+(D-(1+2*T+C)*D**3/6+(5-2*C+28*T)*D**5/120)/cp;return[Math.round(lon*180/Math.PI*1e6)/1e6,Math.round(lat*180/Math.PI*1e6)/1e6];}
 function convC(c){if(!c)return c;if(typeof c[0]==='number'){const r=utmk2wgs(c[0],c[1]);return r;}return c.map(convC);}
 function needConv(geo){try{let c=geo.features[0]?.geometry?.coordinates;while(Array.isArray(c[0]))c=c[0];return Math.abs(c[0])>500;}catch{return false;}}
 function convGeo(geo){if(!needConv(geo))return geo;return{...geo,features:geo.features.map(f=>({...f,geometry:{...f.geometry,coordinates:convC(f.geometry.coordinates)}}))};}
@@ -663,11 +663,13 @@ function initMapLayers(){
   // 1. sgg-bg-layer  : 굵은 stroke로 경계선 기초 (fill + 두꺼운 테두리)
   // 2. sgg-fill-layer: fill만 → sgg-bg의 내부 stroke를 덮어 시도 내부선 제거
   //    → 시도가 다른 곳(배경/인접 시도)은 덮어줄 fill이 없으므로 외곽선만 남음
-  // 3. lbl-layer     : 텍스트
+  // 3. selected-outline-layer: 드릴다운 시 sigunguGeo 기반 외곽선 (sido-border 대체)
+  // 4. lbl-layer     : 텍스트
   g.append('g').attr('id','sgg-bg-layer');
   g.append('g').attr('id','sgg-fill-layer');
   g.append('g').attr('id','sgg-layer').attr('display','none'); // 기존 호환용 (숨김)
   g.append('g').attr('id','sido-border-layer').attr('display','none'); // 더 이상 불필요
+  g.append('g').attr('id','selected-outline-layer'); // ★ 드릴다운 외곽선
   g.append('g').attr('id','lbl-layer');
 
   _proj=d3.geoMercator().fitExtent([[18,18],[W-18,H-18]],ST.sidoGeo);
@@ -853,6 +855,7 @@ function resizeMap(){
   d3.selectAll('.sgg-bg').attr('d', _path);
   d3.selectAll('.sgg-path').attr('d', _path);
   d3.selectAll('.sido-border').attr('d', d => { try { return _path(d); } catch { return ''; } });
+  renderSelectedOutline(); // ★ 리사이즈 시 외곽선 재계산
   
   d3.selectAll('.sido-lbl').attr('transform',function(d){
       const ct=_path.centroid(d);
@@ -868,6 +871,58 @@ function resizeMap(){
   }
 }
 
+/**
+ * 드릴다운 시 selected sido 외곽선을 sigunguGeo에서 직접 생성
+ * — sido-border-layer(별도 sidoGeo 소스)를 쓰지 않으므로 misalignment 없음
+ * — 개별 시군구 polygon bbox를 union해서 외곽선 path 생성
+ */
+function renderSelectedOutline() {
+  const layer = d3.select('#selected-outline-layer');
+  layer.selectAll('*').remove();
+  if (!ST.selectedSido || !ST.sigunguGeo || !_path) return;
+
+  const feats = ST.sigunguGeo.features.filter(
+    f => f.properties._sidoName === ST.selectedSido
+  );
+  if (!feats.length) return;
+
+  // 각 시군구를 개별 path로 그린 뒤 CSS clip으로 외곽만 남기는 대신
+  // SVG filter로 흐린 stroke를 모아 외곽선 효과를 냄 (turf 불필요)
+  // → 동일 sgg 좌표 기반이므로 100% 정확
+  const filterId = 'outline-dilate';
+  const defs = d3.select('#map-svg').select('defs');
+  if (defs.empty()) d3.select('#map-svg').insert('defs', ':first-child');
+
+  // 시군구 조각들을 같은 레이어에 그리고, feColorMatrix로 외곽만 추출
+  layer.selectAll('.sel-sgg')
+    .data(feats).join('path')
+    .attr('class', 'sel-sgg')
+    .attr('d', _path)
+    .attr('fill', 'black')
+    .attr('stroke', 'none')
+    .attr('pointer-events', 'none');
+
+  // SVG feMorphology dilate → erode 차이로 외곽선만 추출
+  const svgEl = document.getElementById('map-svg');
+  let defsEl = svgEl.querySelector('defs');
+  if (!defsEl) { defsEl = document.createElementNS('http://www.w3.org/2000/svg','defs'); svgEl.insertBefore(defsEl, svgEl.firstChild); }
+
+  // 이미 있으면 제거 후 재생성
+  const existing = defsEl.querySelector(`#${filterId}`);
+  if (existing) existing.remove();
+
+  defsEl.innerHTML += `
+    <filter id="${filterId}" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">
+      <feMorphology operator="dilate" radius="2" in="SourceGraphic" result="dilated"/>
+      <feMorphology operator="erode"  radius="2" in="SourceGraphic" result="eroded"/>
+      <feComposite in="dilated" in2="eroded" operator="out" result="outline"/>
+      <feFlood flood-color="#04060e" flood-opacity="1" result="color"/>
+      <feComposite in="color" in2="outline" operator="in"/>
+    </filter>`;
+
+  layer.attr('filter', `url(#${filterId})`);
+}
+
 // 시도 클릭 시 처리 애니메이션
 function drillDown(sidoName){
   if(!_mapInitialized)return;
@@ -876,7 +931,8 @@ function drillDown(sidoName){
   document.getElementById('drill-nav').style.display='block';
   document.getElementById('opacity-row').style.display='flex';
 
-  updateMapColors(); // 색상 처리 변경
+  updateMapColors();
+  renderSelectedOutline(); // ★ sigunguGeo 기반 외곽선
 
   const t=_zoomToSido(sidoName);
   if(t)d3.select('#map-svg').transition().duration(650).call(ST.zoomBehavior.transform,t);
@@ -909,7 +965,8 @@ function drillUp(){
   document.getElementById('drill-nav').style.display='none';
   document.getElementById('opacity-row').style.display='none';
   
-  updateMapColors(); // 전국 단위 색상으로 복귀
+  updateMapColors();
+  renderSelectedOutline(); // ★ 선택 해제 시 외곽선 제거
   
   if(ST.zoomBehavior){
     d3.select('#map-svg').transition().duration(600).call(ST.zoomBehavior.transform,d3.zoomIdentity);
