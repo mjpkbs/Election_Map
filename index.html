@@ -473,6 +473,11 @@ const D_SGG={
 // ════════════════════════════════════════════
 //  SIDO 목록 & 유틸
 // ════════════════════════════════════════════
+
+// Feature의 properties에서 시도 한국어 이름 안전 추출
+function getSidoNameFromProps(p){
+  return p.name?normName(p.name):extractSidoName(p)||normName(getGeoName(p));
+}
 const SIDO_ALL=['서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시','세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도','경상북도','경상남도','제주특별자치도'];
 const SIDO_CODE={'서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28','광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36','경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44','전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50'};
 const NO_SGG=['세종특별자치시','제주특별자치도']; // 기초단체장 없음
@@ -577,10 +582,16 @@ async function loadVWorldGeo(){
     const sggFC=await fetchVWorldLayer('LT_C_ADSIGG_INFO',1000);
     const sidoGeo=normGeo(sidoFC);
     const sigunguGeo=normGeo(sggFC);
-    // 시군구에 sido 코드 주입 (sig_cd 앞 2자리)
+    // sido 코드/이름 추가 주입 (normGeo에서 이미 처리하지만 확실히)
     sigunguGeo.features.forEach(f=>{
-      const cd=f.properties.code||f.properties.sig_cd||'';
-      if(cd)f.properties.sido=String(cd).slice(0,2);
+      const cd=String(f.properties.sig_cd||f.properties.code||f.properties.CD_SIGUNGU||'');
+      if(cd&&cd.length>=2)f.properties.sido=cd.slice(0,2);
+      // full_nm에서 시도명 추출
+      const fn=f.properties.full_nm||'';
+      if(fn&&!f.properties.sidoName){
+        const sFound=SIDO_ALL.find(s=>fn.startsWith(s));
+        if(sFound)f.properties.sidoName=sFound;
+      }
     });
     try{localStorage.setItem('el_geo_cache',JSON.stringify({sido:sidoGeo,sigungu:sigunguGeo,ts:Date.now()}));}
     catch(e){console.warn('캐시 저장 실패',e.message);}
@@ -595,18 +606,81 @@ async function loadVWorldGeo(){
     if(btn){btn.disabled=false;btn.textContent='🗺 VWorld 지도 갱신';}
   }
 }
+// 시도 이름 후보를 props에서 모두 추출하고 SIDO_ALL과 매칭
+function extractSidoName(p){
+  // 가능한 모든 시도명 필드명 시도
+  const raw=[
+    p.NM_SIDO, p.ctp_kor_nm, p.CTP_KOR_NM, p.SIDO, p.sido_nm,
+    p.NAME_1, p.name, p.adm_nm, p.KOR_NM
+  ].filter(Boolean).map(v=>String(v).trim());
+
+  for(const v of raw){
+    const nm=normName(v);
+    if(SIDO_ALL.includes(nm))return nm;
+    // 부분 일치 (짧은 별칭 → 전체 이름)
+    const m=SIDO_ALL.find(s=>s.includes(nm)||nm.includes(s.replace(/특별시$|광역시$|특별자치시$|특별자치도$|도$/,'')));
+    if(m)return m;
+  }
+  return null;
+}
+
+// 시군구 이름을 props에서 추출 (시도 접두어 제거 포함)
+function extractSggName(p){
+  const raw=[
+    p.NM_SIGUNGU, p.sig_kor_nm, p.SIG_KOR_NM, p.SGG, p.sgg_nm,
+    p.NAME_2, p.name, p.adm_nm
+  ].filter(Boolean).map(v=>String(v).trim());
+
+  for(const v of raw){
+    if(!v)continue;
+    let nm=normSgg(v);
+    // "서울특별시 종로구" 형태면 시도명 제거
+    for(const s of SIDO_ALL){
+      if(nm.startsWith(s+' ')){nm=nm.slice(s.length+1);break;}
+      const short=s.replace(/특별시$|광역시$|특별자치시$|특별자치도$/,'');
+      if(nm.startsWith(short+' ')){nm=nm.slice(short.length+1);break;}
+    }
+    if(nm)return nm;
+  }
+  return '';
+}
+
 function normGeo(geo){
+  if(!geo||!geo.features)return geo;
+
+  // 첫 번째 feature로 파일 타입 감지 (디버그용 로그)
+  const sample=geo.features[0]?.properties||{};
+  console.log('[normGeo] 샘플 properties 키:', Object.keys(sample).slice(0,10));
+  console.log('[normGeo] 샘플 값 일부:', JSON.stringify(sample).slice(0,200));
+
   return{...geo,features:geo.features.map(f=>{
     const p=f.properties;
-    // 한국어 소스 우선: NM_SIGUNGU/NM_SIDO(사용자), sig_kor_nm/ctp_kor_nm(VWorld)
-    const isKorean=!!(p.NM_SIGUNGU||p.NM_SIDO||p.sig_kor_nm||p.ctp_kor_nm);
-    const raw=getGeoName(p);
-    let nm=isKorean?raw:normName(normSgg(raw));
-    // SGIS/일부 파일: "서울특별시 종로구" 형태일 경우 → "종로구" 추출
-    // VWorld sig_kor_nm은 이미 "종로구" 형태
-    const sidoPrefixes=['서울특별시 ','부산광역시 ','대구광역시 ','인천광역시 ','광주광역시 ','대전광역시 ','울산광역시 ','세종특별자치시 ','경기도 ','강원특별자치도 ','강원도 ','충청북도 ','충청남도 ','전북특별자치도 ','전라북도 ','전라남도 ','경상북도 ','경상남도 ','제주특별자치도 '];
-    for(const pfx of sidoPrefixes){if(nm.startsWith(pfx)){nm=nm.slice(pfx.length);break;}}
-    return{...f,properties:{...p,name:nm,code:getGeoCode(p)}};
+    // 시도 이름 판단: NM_SIDO, ctp_kor_nm 등
+    const isSidoFile=!!(p.NM_SIDO||p.ctp_kor_nm||p.CTP_KOR_NM||p.ctprvn_cd);
+    // 시군구 이름 판단: NM_SIGUNGU, sig_kor_nm 등
+    const isSggFile=!!(p.NM_SIGUNGU||p.sig_kor_nm||p.SIG_KOR_NM||p.sig_cd);
+
+    let nm='';
+    if(isSidoFile&&!isSggFile){
+      // 시도 파일
+      nm=extractSidoName(p)||normName(normSgg(getGeoName(p)));
+    }else if(isSggFile){
+      // 시군구 파일
+      nm=extractSggName(p)||normSgg(getGeoName(p));
+      // sig_cd로 sido 코드 주입
+      const sigCd=String(p.sig_cd||p.SIG_CD||p.CD_SIGUNGU||getGeoCode(p));
+      if(sigCd&&sigCd.length>=2&&!p.sido){
+        p.sido=sigCd.slice(0,2);
+      }
+      // NM_SIDO로 sido 이름 주입
+      if(p.NM_SIDO&&!p.sidoName)p.sidoName=normName(p.NM_SIDO);
+    }else{
+      // 알 수 없는 형식 → 최대한 추출
+      nm=extractSidoName(p)||extractSggName(p)||normName(normSgg(getGeoName(p)));
+    }
+
+    const code=getGeoCode(p);
+    return{...f,properties:{...p,name:nm,code}};
   })};
 }
 
@@ -721,26 +795,40 @@ function renderMap(){
 
   g.selectAll('.sido-p').data(ST.sidoGeo.features).join('path')
     .attr('class','sido-p').attr('d',_path)
-    .attr('fill',d=>{const nm=normName(d.properties.name||getGeoName(d.properties));const d2=ST.data[nm];return d2?pc(d2.winner):'#111a30';})
+    .attr('fill',d=>{
+      const p=d.properties;
+      // 1순위: normGeo가 설정한 name
+      let nm=p.name?normName(p.name):'';
+      if(nm&&ST.data[nm])return pc(ST.data[nm].winner);
+      // 2순위: 원본 속성에서 직접 시도명 추출
+      const sidoNm=extractSidoName(p);
+      if(sidoNm&&ST.data[sidoNm])return pc(ST.data[sidoNm].winner);
+      // 3순위: getGeoName → normName
+      const raw=normName(getGeoName(p));
+      if(raw&&ST.data[raw])return pc(ST.data[raw].winner);
+      // 4순위: SIDO_ALL 부분매칭
+      if(raw){const m=SIDO_ALL.find(s=>s===raw||s.includes(raw)||raw.includes(s.replace(/특별시$|광역시$|특별자치시$|특별자치도$/,'')));if(m&&ST.data[m])return pc(ST.data[m].winner);}
+      return '#111a30';
+    })
     .attr('stroke','#04060e').attr('stroke-width',.7)
-    .attr('opacity',d=>{if(!ST.selectedSido)return 1;return normName(d.properties.name||getGeoName(d.properties))===ST.selectedSido?1:.45;})
+    .attr('opacity',d=>{if(!ST.selectedSido)return 1;const nm=normName(d.properties.name||'')||extractSidoName(d.properties)||normName(getGeoName(d.properties));return nm===ST.selectedSido?1:.45;})
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
       if(!ST.selectedSido)d3.select(this).attr('opacity',.72);
-      const nm=normName(d.properties.name||getGeoName(d.properties));
+      const nm=getSidoNameFromProps(d.properties);
       showDetail(nm);showMainTooltip(ev,nm,W);
     })
     .on('mousemove',ev=>moveTooltip(ev,W))
     .on('mouseout',function(ev,d){
-      const nm=normName(d.properties.name||getGeoName(d.properties));
+      const nm=getSidoNameFromProps(d.properties);
       if(!ST.selectedSido)d3.select(this).attr('opacity',1);
       if(!ST.selectedSido||ST.selectedSido!==nm)clearDetail();
       hideTooltip();
     })
     .on('click',(ev,d)=>{
-      const nm=normName(d.properties.name||getGeoName(d.properties));
+      const nm=getSidoNameFromProps(d.properties);
       if(ST.selectedSido===nm){hideInset();ST.selectedSido=null;d3.selectAll('.sido-p').attr('opacity',1);}
-      else{ST.selectedSido=nm;d3.selectAll('.sido-p').attr('opacity',f=>normName(f.properties.name||getGeoName(f.properties))===nm?1:.45);showDetail(nm);showInset(nm,ev,W,H);}
+      else{ST.selectedSido=nm;d3.selectAll('.sido-p').attr('opacity',f=>getSidoNameFromProps(f.properties)===nm?1:.45);showDetail(nm);showInset(nm,ev,W,H);}
     });
 
   // 레이블
@@ -749,9 +837,9 @@ function renderMap(){
       .attr('class','sido-lbl').attr('transform',d=>{const c=_path.centroid(d);return `translate(${c[0]},${c[1]})`;})
       .attr('text-anchor','middle').attr('dominant-baseline','middle')
       .attr('font-family',"'Noto Sans KR',sans-serif")
-      .attr('font-size',d=>normName(d.properties.name||getGeoName(d.properties))==='경기도'?'13':'11')
+      .attr('font-size',d=>getSidoNameFromProps(d.properties)==='경기도'?'13':'11')
       .attr('font-weight','700').attr('fill','rgba(255,255,255,.88)').attr('pointer-events','none')
-      .text(d=>shortSido(normName(d.properties.name||getGeoName(d.properties))));
+      .text(d=>shortSido(getSidoNameFromProps(d.properties)));
   }
   renderLegend();
   if(ST.selectedSido)showDetail(ST.selectedSido);
@@ -786,21 +874,19 @@ function showInset(sidoName,clickEvent,mapW,mapH){
   const code=SIDO_CODE[sidoName]||'';
   const sggFeatures=ST.sigunguGeo?ST.sigunguGeo.features.filter(f=>{
     const p=f.properties;
-    // 1) NM_SIDO / sig_kor_nm 비교 (normName 적용 — '강원도'→'강원특별자치도' 등)
-    const sidoRaw=p.NM_SIDO||p.sig_sido_nm||'';
-    if(sidoRaw&&normName(sidoRaw)===sidoName)return true;
-    // 2) normGeo 이후 name 기반 (sido 기록이 name에 포함된 경우)
-    const nm=p.name||'';
-    if(nm&&normName(nm)===sidoName)return true;
-    // 3) 코드 앞자리 비교 (sig_cd 앞 2자리 = sido 코드)
-    const rawCode=p.sig_cd||p.CD_SIGUNGU||p.code||getGeoCode(p);
-    const strCode=String(rawCode);
-    if(strCode&&code&&strCode.startsWith(code))return true;
-    // 4) VWorld: 정규화된 name 안에 sido 이름 포함
-    const normNm=normName(p.name||p.sig_kor_nm||'');
-    if(normNm&&normName(normNm)===sidoName)return true;
-    // 5) gadm fallback
-    return normName(p.NAME_1||'')===sidoName;
+    // 1) normGeo가 주입한 sido/sidoName
+    if(p.sidoName&&p.sidoName===sidoName)return true;
+    // 2) sig_cd 앞 2자리 = sido 코드
+    const rawCode=String(p.sig_cd||p.SIG_CD||p.CD_SIGUNGU||p.code||getGeoCode(p)||'');
+    if(rawCode&&code&&rawCode.startsWith(code))return true;
+    // 3) NM_SIDO 직접 비교 (normName 적용)
+    const sidoRaw=p.NM_SIDO||p.sido_nm||p.sig_sido_nm||'';
+    if(sidoRaw&&normName(String(sidoRaw).trim())===sidoName)return true;
+    // 4) full_nm: "서울특별시 종로구" → 앞부분 추출
+    const fullNm=String(p.full_nm||p.FULL_NM||'');
+    if(fullNm&&SIDO_ALL.some(s=>fullNm.startsWith(s)&&normName(fullNm.split(' ')[0])===sidoName))return true;
+    // 5) gadm NAME_1
+    return normName(p.NAME_1||p.name||'')===sidoName;
   }):[];
 
   // 인셋 지도 SVG
@@ -817,7 +903,7 @@ function showInset(sidoName,clickEvent,mapW,mapH){
     const ig=d3.select('#inset-svg').append('g');
 
     // 시도 배경
-    ig.selectAll('.i-sido').data(ST.sidoGeo.features.filter(f=>normName(f.properties.name||getGeoName(f.properties))===sidoName)).join('path')
+    ig.selectAll('.i-sido').data(ST.sidoGeo.features.filter(f=>getSidoNameFromProps(f.properties)===sidoName)).join('path')
       .attr('class','i-sido').attr('d',d=>{try{return path2(d);}catch{return '';}})
       .attr('fill',()=>{const d2=ST.data[sidoName];return d2?pc(d2.winner)+'33':'#1a2030';})
       .attr('stroke','none');
@@ -826,7 +912,7 @@ function showInset(sidoName,clickEvent,mapW,mapH){
     ig.selectAll('.i-sgg').data(sggFeatures).join('path')
       .attr('class','i-sgg').attr('d',d=>{try{return path2(d);}catch{return '';}})
       .attr('fill',d=>{
-        const rawName=d.properties.name||getGeoName(d.properties);
+        const rawName=d.properties.name||extractSggName(d.properties)||getGeoName(d.properties);
         const party=getSggParty(sidoName,rawName,ST.currentSgId);
         if(party)return pc(party);
         const sido=ST.data[sidoName];return sido?pc(sido.winner)+'cc':'#1a2030';
@@ -835,7 +921,7 @@ function showInset(sidoName,clickEvent,mapW,mapH){
       .style('cursor','default')
       .on('mouseover',function(ev,d){
         d3.select(this).attr('opacity',.72);
-        const rawName=d.properties.name||getGeoName(d.properties);
+        const rawName=d.properties.name||extractSggName(d.properties)||getGeoName(d.properties);
         const party=getSggParty(sidoName,rawName,ST.currentSgId);
         const IRect=document.getElementById('inset-panel').getBoundingClientRect();
         showInsetTooltip(ev,rawName,party,IRect);
@@ -850,7 +936,7 @@ function showInset(sidoName,clickEvent,mapW,mapH){
         .attr('font-size',sggFeatures.length>20?'6':'7').attr('font-weight','600')
         .attr('fill','rgba(255,255,255,.82)').attr('pointer-events','none')
         .attr('font-family',"'Noto Sans KR',sans-serif")
-        .text(d=>(d.properties.name||getGeoName(d.properties)).replace(/특별시|광역시|특별자치시|특별자치도|도$/,'').replace(/시$|구$|군$|읍$|면$/,'').slice(0,4));
+        .text(d=>(extractSggName(d.properties)||d.properties.name||getGeoName(d.properties)).replace(/시$|구$|군$|읍$|면$/,'').slice(0,4));
     }
   }else{
     d3.select('#inset-svg').append('text').attr('x',IW/2).attr('y',IH/2)
@@ -979,7 +1065,7 @@ function clickListSido(nm){
   showDetail(nm);
   // 지도에서 해당 시도 하이라이트
   if(_proj&&_path){
-    const feat=ST.sidoGeo?.features?.find(f=>normName(f.properties.name||getGeoName(f.properties))===nm);
+    const feat=ST.sidoGeo?.features?.find(f=>getSidoNameFromProps(f.properties)===nm);
     if(feat){
       // 클릭 중심점 계산
       const c=_path.centroid(feat);
@@ -987,7 +1073,7 @@ function clickListSido(nm){
       const rect=mapEl.getBoundingClientRect();
       const fakeEv={clientX:rect.left+c[0],clientY:rect.top+c[1]};
       ST.selectedSido=nm;
-      d3.selectAll('.sido-p').attr('opacity',f=>normName(f.properties.name||getGeoName(f.properties))===nm?1:.45);
+      d3.selectAll('.sido-p').attr('opacity',f=>getSidoNameFromProps(f.properties)===nm?1:.45);
       showInset(nm,fakeEv,rect.width,rect.height);
     }
   }
