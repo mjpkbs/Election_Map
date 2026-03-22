@@ -85,9 +85,9 @@ input[type=range]::-webkit-slider-runnable-track {
 }
 
 /* ── 로딩 ── */
-#loading-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:var(--bg);z-index:20;}
-.spinner{width:26px;height:26px;border:2px solid #1a2a40;border-top-color:#3a5ad4;border-radius:50%;animation:spin .7s linear infinite;}
-#loading-txt{font-size:13px;color:var(--sub);}
+#loading-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:rgba(4,6,14,0.9);backdrop-filter:blur(4px);z-index:100;}
+.spinner{width:30px;height:30px;border:3px solid #1a2a40;border-top-color:#3a5ad4;border-radius:50%;animation:spin .7s linear infinite;}
+#loading-txt{font-size:13px;color:var(--sub);font-weight:600;}
 
 /* ── 메인 지도 툴팁 ── */
 #tooltip{position:absolute;pointer-events:none;z-index:25;min-width:180px;background:rgba(4,6,14,.97);border:1px solid var(--border2);border-radius:7px;padding:11px 13px;display:none;backdrop-filter:blur(10px);box-shadow:0 8px 32px rgba(0,0,0,.75);}
@@ -185,7 +185,7 @@ input[type=range]::-webkit-slider-runnable-track {
 
 <div id="main">
   <div id="map-area">
-    <div id="loading-wrap"><div class="spinner"></div><div id="loading-txt">지도 데이터 로딩 중...</div></div>
+    <div id="loading-wrap"><div class="spinner"></div><div id="loading-txt">연도별 지도 데이터 준비 중...</div></div>
     
     <div id="drill-nav">
       <button class="btn-nav-back" onclick="drillUp()">⬅ 전국으로 돌아가기</button>
@@ -256,7 +256,7 @@ input[type=range]::-webkit-slider-runnable-track {
       </div></div>
     <div class="m-btns">
       <button class="btn-ok" onclick="saveSettings()">저장 및 적용</button>
-      <button class="btn-sm" onclick="fetchSGISGeo()">🗺 SGIS 지도 갱신</button>
+      <button class="btn-sm" onclick="fetchSGISGeo(curEl().year)">🗺 현재 연도 지도 갱신</button>
       <button class="btn-cancel" onclick="closeSettings()">취소</button>
     </div>
     <div id="cache-st"></div>
@@ -265,7 +265,7 @@ input[type=range]::-webkit-slider-runnable-track {
 
 <script>
 // ════════════════════════════════════════════
-//  IndexedDB 캐싱 (SGIS 대용량 지도 캐시용)
+//  IndexedDB 캐싱 (연도별 SGIS 지도 캐시용)
 // ════════════════════════════════════════════
 const DB_NAME = 'ElectionMapDB';
 const STORE_NAME = 'geoStore';
@@ -284,20 +284,22 @@ function initDB() {
   });
 }
 
-async function saveGeoToCache(data) {
+// 연도(year)를 키(key)로 하여 지도 데이터를 저장
+async function saveGeoToCache(year, data) {
   try {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(data, 'geo_cache');
+    tx.objectStore(STORE_NAME).put(data, `geo_cache_${year}`);
     return new Promise(res => { tx.oncomplete = () => res(true); tx.onerror = () => res(false); });
   } catch (e) { console.warn('IDB Save Fail', e); return false; }
 }
 
-async function loadGeoFromCache() {
+// 특정 연도(year)의 지도 데이터 불러오기
+async function loadGeoFromCache(year) {
   try {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).get('geo_cache');
+    const req = tx.objectStore(STORE_NAME).get(`geo_cache_${year}`);
     return new Promise(res => { req.onsuccess = () => res(req.result); req.onerror = () => res(null); });
   } catch (e) { return null; }
 }
@@ -440,7 +442,7 @@ const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
 
 // ════════════════════════════════════════════
-//  GEO JSON
+//  GEO JSON & API FETCH
 // ════════════════════════════════════════════
 const GEO_SRCS=[
   {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
@@ -486,85 +488,138 @@ function normGeo(geo){
   })};
 }
 
-async function fetchSGISGeo(){
-  const st=document.getElementById('cache-st');
-  try{
-    st.textContent='SGIS 다운로드 중...';
-    const proxy=ST.proxyUrl.replace(/\/$/,'');
-    const authUrl=`https://sgisapi.mods.go.kr/OpenAPI3/auth/authentication.json?consumer_key=${encodeURIComponent(ST.sgisKey)}&consumer_secret=${encodeURIComponent(ST.sgisSecret)}`;
-    const ar=await fetch(`${proxy}?url=${encodeURIComponent(authUrl)}`);
-    const ad=await ar.json();
-    if(ad.errCd!==0)throw new Error(ad.errMsg);
-    const token=ad.result.accessToken;
+// 특정 연도(targetYear)의 SGIS 지도 다운로드
+async function fetchSGISGeo(targetYear) {
+  const loading = document.getElementById('loading-wrap');
+  const txt = document.getElementById('loading-txt');
+  if (loading) loading.style.display = 'flex';
+  if (txt) txt.textContent = `${targetYear}년 SGIS 지도 다운로드 중...`;
+  
+  const st = document.getElementById('cache-st');
+  try {
+    const proxy = ST.proxyUrl.replace(/\/$/, '');
+    const authUrl = `https://sgisapi.mods.go.kr/OpenAPI3/auth/authentication.json?consumer_key=${encodeURIComponent(ST.sgisKey)}&consumer_secret=${encodeURIComponent(ST.sgisSecret)}`;
+    const ar = await fetch(`${proxy}?url=${encodeURIComponent(authUrl)}`);
+    const ad = await ar.json();
+    if (ad.errCd !== 0) throw new Error(ad.errMsg);
+    const token = ad.result.accessToken;
     
-    const bUrl=(adm,ls,yr)=>{
-      const admParam=adm?`&adm_cd=${encodeURIComponent(adm)}`:'';
+    // SGIS는 최신 연도가 2023까지만 있을 수 있으므로, 미래 선거(2026)는 2023 이하로 보정
+    const maxSgisYear = 2023; 
+    let apiYear = targetYear > maxSgisYear ? maxSgisYear : targetYear;
+
+    const bUrl = (adm, ls, yr) => {
+      const admParam = adm ? `&adm_cd=${encodeURIComponent(adm)}` : '';
       return `https://sgisapi.mods.go.kr/OpenAPI3/boundary/hadmarea.geojson?accessToken=${encodeURIComponent(token)}&year=${yr}${admParam}&low_search=${ls}`;
     };
 
-    let sidoF=null;
-    for(const yr of['2024','2023','2022','2021']){
-      const r=await fetch(`${proxy}?url=${encodeURIComponent(bUrl('',0,yr))}`);
-      if(r.ok){const d=await r.json();if((d.errCd===0||d.errCd===undefined)&&d.features?.length){sidoF=d.features;break;}}
+    let sidoF = null;
+    let actualYear = apiYear;
+    
+    // 타겟 연도부터 거꾸로 내려가며 존재하는 지도 데이터를 찾음
+    for (let yr = apiYear; yr >= 2010; yr--) {
+      const r = await fetch(`${proxy}?url=${encodeURIComponent(bUrl('', 0, yr))}`);
+      if (r.ok) {
+        const d = await r.json();
+        if ((d.errCd === 0 || d.errCd === undefined) && d.features?.length) {
+          sidoF = d.features;
+          actualYear = yr;
+          break;
+        }
+      }
     }
-    if(!sidoF)throw new Error('시도 데이터 없음');
+    if (!sidoF) throw new Error(`${targetYear}년 지도 데이터 없음`);
     
-    st.textContent='시군구 경계 다운로드 중...';
-    const sggAll=[];
-    for(const sf of sidoF){
-      const code=String(sf.properties.adm_cd||'');
-      try{
-        const r=await fetch(`${proxy}?url=${encodeURIComponent(bUrl(code,1,'2023'))}`);
-        if(r.ok){const d=await r.json();if((d.errCd===0||d.errCd===undefined)&&d.features){
-          d.features.forEach(ff=>{ff.properties.sido=code.slice(0,2);sggAll.push(ff);});
-        }}
-      }catch{}
+    if (txt) txt.textContent = `${actualYear}년 시군구 경계 다운로드 중...`;
+    const sggAll = [];
+    for (const sf of sidoF) {
+      const code = String(sf.properties.adm_cd || '');
+      try {
+        const r = await fetch(`${proxy}?url=${encodeURIComponent(bUrl(code, 1, actualYear))}`);
+        if (r.ok) {
+          const d = await r.json();
+          if ((d.errCd === 0 || d.errCd === undefined) && d.features) {
+            d.features.forEach(ff => { ff.properties.sido = code.slice(0, 2); sggAll.push(ff); });
+          }
+        }
+      } catch {}
     }
-    const sidoGeo=normGeo(convGeo({type:'FeatureCollection',features:sidoF}));
-    const sigunguGeo=normGeo(convGeo({type:'FeatureCollection',features:sggAll}));
     
-    // IndexedDB에 저장
-    await saveGeoToCache({sido:sidoGeo,sigungu:sigunguGeo,ts:Date.now()});
+    const sidoGeo = normGeo(convGeo({ type: 'FeatureCollection', features: sidoF }));
+    const sigunguGeo = normGeo(convGeo({ type: 'FeatureCollection', features: sggAll }));
     
-    ST.sidoGeo=sidoGeo;ST.sigunguGeo=sigunguGeo;ST.geoLoaded=true;
-    st.textContent=`✅ SGIS 갱신 및 캐싱 완료`;
-    preprocessSggColors(ST.currentSgId);
-    renderAll();
-  }catch(e){st.textContent=`❌ ${e.message}`;}
+    // 연도별 캐시에 저장
+    await saveGeoToCache(targetYear, { sido: sidoGeo, sigungu: sigunguGeo, ts: Date.now(), actualYear });
+    
+    ST.sidoGeo = sidoGeo; ST.sigunguGeo = sigunguGeo; ST.geoLoaded = true;
+    if (st) st.textContent = `✅ ${targetYear}년 지도(SGIS ${actualYear}년 기준) 갱신 완료`;
+    
+    rebuildMap();
+  } catch(e) { 
+    if (st) st.textContent = `❌ SGIS 다운로드 실패: ${e.message}`; 
+  } finally {
+    if (loading) loading.style.display = 'none';
+  }
 }
 
-async function loadGeo(){
-  document.getElementById('loading-wrap').style.display = 'flex';
-  try{
-    // IndexedDB에서 로드
-    const c = await loadGeoFromCache();
-    if(c&&c.sido&&c.sigungu){
-      ST.sidoGeo=c.sido;ST.sigunguGeo=c.sigungu;ST.geoLoaded=true;
-      preprocessSggColors(ST.currentSgId);
-      renderAll();
-      document.getElementById('loading-wrap').style.display = 'none';
+// 탭 전환 및 최초 실행 시 호출되는 연도별 지도 로더
+async function loadGeo(year) {
+  const loading = document.getElementById('loading-wrap');
+  const txt = document.getElementById('loading-txt');
+  loading.style.display = 'flex';
+  txt.textContent = `${year}년 지도 데이터 불러오는 중...`;
+  
+  try {
+    // 1. IndexedDB 연도별 캐시 확인
+    const c = await loadGeoFromCache(year);
+    if (c && c.sido && c.sigungu) {
+      ST.sidoGeo = c.sido; ST.sigunguGeo = c.sigungu; ST.geoLoaded = true;
+      rebuildMap();
+      loading.style.display = 'none';
       return;
     }
-  }catch(e){}
+  } catch(e) {}
 
+  // 2. 캐시가 없고 SGIS 키가 등록되어 있다면 SGIS에서 다운로드
+  if (ST.sgisKey && ST.sgisSecret && ST.proxyUrl) {
+    await fetchSGISGeo(year);
+    return;
+  }
+
+  // 3. 키가 없다면 기본 로컬 파일로 fallback (연도 구분 불가능하지만 화면 표출을 위해)
+  txt.textContent = `SGIS 연동이 안되어 기본 지도를 띄웁니다.`;
   for(const src of GEO_SRCS){
     const [sd,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
     if(sd&&sg){
       ST.sidoGeo=normGeo(convGeo(sd));ST.sigunguGeo=normGeo(convGeo(sg));
       ST.geoLoaded=true;
-      preprocessSggColors(ST.currentSgId);
-      renderAll();
-      document.getElementById('loading-wrap').style.display = 'none';
+      rebuildMap();
+      loading.style.display = 'none';
       return;
     }
   }
-  document.getElementById('loading-txt').textContent = '지도 데이터가 없습니다. SGIS를 갱신해주세요.';
+  txt.textContent = '지도 데이터가 없습니다. 설정에서 SGIS를 갱신해주세요.';
 }
 
 // ════════════════════════════════════════════
-//  메인 지도 렌더 
+//  메인 지도 렌더 & 리빌드 (연도 변경 시)
 // ════════════════════════════════════════════
 let _proj=null,_path=null,_mapInitialized=false;
+
+// 지도를 아예 뜯어고치는 함수 (GeoJSON 피처 개수 자체가 바뀌기 때문)
+function rebuildMap() {
+  _mapInitialized = false;
+  // 기존 SVG 객체들 전부 삭제
+  d3.select('#map-svg').selectAll('*').remove();
+  // Zoom 이벤트 초기화
+  d3.select('#map-svg').on('.zoom', null);
+  ST.currentTransform = d3.zoomIdentity;
+  
+  if (ST.sigunguGeo) preprocessSggColors(ST.currentSgId);
+  initMapLayers();
+  renderList();
+  renderSummaryBar();
+}
 
 function _sidoFill(p){
   let nm=p.name?normName(p.name):'';
@@ -597,7 +652,7 @@ function initMapLayers(){
 
   const g=svg.append('g').attr('id','map-g');
   
-  // Z-index 버그 해결: 미리 레이어를 올바른 순서대로 선언해둠
+  // Z-index 보장
   g.append('g').attr('id','sido-layer');
   g.append('g').attr('id','sgg-layer');
   g.append('g').attr('id','sido-lbl-layer');
@@ -630,7 +685,6 @@ function initMapLayers(){
       if(ST.selectedSido===nm)drillUp(); else drillDown(nm);
     });
 
-  // 텍스트는 이제 sido-lbl-layer 안에 들어감
   d3.select('#sido-lbl-layer').selectAll('.sido-lbl')
     .data(ST.sidoGeo.features).join('text')
     .attr('class','sido-lbl')
@@ -692,7 +746,6 @@ function resizeMap(){
 }
 
 function _renderSggLayer(g, sidoName){
-  // 기존 그룹 내부 지우기 (z-index 유지)
   const sggLayer = g.select('#sgg-layer');
   sggLayer.selectAll('*').remove();
   const sggLblLayer = g.select('#sgg-lbl-layer');
@@ -755,7 +808,6 @@ function drillDown(sidoName){
   if(!_mapInitialized)return;
   ST.selectedSido=sidoName;
 
-  // 상단 뒤로가기 버튼 / 하단 투명도 조절 노출
   document.getElementById('drill-nav').style.display='block';
   document.getElementById('opacity-row').style.display='flex';
 
@@ -793,7 +845,6 @@ function drillUp(){
   if(!ST.selectedSido)return;
   ST.selectedSido=null;
   
-  // 버튼 및 슬라이더 숨김
   document.getElementById('drill-nav').style.display='none';
   document.getElementById('opacity-row').style.display='none';
   
@@ -811,7 +862,6 @@ function drillUp(){
   renderList();
 }
 
-// 배경 투명도 업데이트
 function changeBgOpacity(val) {
   ST.bgOpacity = parseFloat(val);
   if(ST.selectedSido) {
@@ -1060,12 +1110,15 @@ function exportMapPNG(withLabels){
 function renderTabs(){
   document.getElementById('election-tabs').innerHTML=ELECTIONS.map(e=>`<div class="etab${e.sgId===ST.currentSgId?' active':''}" onclick="switchElection('${e.sgId}')"><span class="tab-year">${e.year}</span> <span style="font-size:10px;opacity:.6">${e.round}</span> <span class="tab-badge ${e.status==='upcoming'?'upcoming':'done'}">${e.status==='upcoming'?'예정':'확정'}</span></div>`).join('');
 }
+
 async function switchElection(sgId){
   if(ST.isLive)toggleLive();
   stopPolling();
   if(ST.selectedSido) drillUp();
   
   ST.currentSgId=sgId;
+  const targetYear = curEl().year;
+
   if(!ST._loaded){ST._loaded={};}
   if(ST._loaded[sgId]){
     ST.data=ST._loaded[sgId];
@@ -1075,8 +1128,11 @@ async function switchElection(sgId){
     ST.dataSource='none';
   }
   renderTabs();updateHeader();clearDetail();
-  if(ST.geoLoaded){preprocessSggColors(ST.currentSgId);updateMapColors();renderList();renderSummaryBar();}
+  
+  // 탭 변경 시 해당 연도의 지도를 호출하여 다시 그립니다.
+  await loadGeo(targetYear);
 }
+
 function updateHeader(){
   const el=curEl();
   document.getElementById('hd-year').textContent=`${el.year} 개표현황`;
@@ -1227,7 +1283,13 @@ async function fetchAllSidoAPI(sgId){
     ST.dataSource='api';
     updateHeader();
     preprocessSggColors(sgId);
-    renderAll();
+    
+    // API 호출이 끝나면 데이터를 다시 반영해 그립니다.
+    if(ST.sigunguGeo) preprocessSggColors(ST.currentSgId);
+    updateMapColors();
+    renderList();
+    renderSummaryBar();
+    
     fetchAllSggAPI(sgId).catch(()=>{});
     errEl.textContent=failed.length ?`${success}/${SIDO_ALL.length} 완료, 실패: ${failed.join(', ')}`:`✅ API 갱신 완료`;
     setTimeout(()=>errEl.classList.remove('show'),4000);
@@ -1342,11 +1404,12 @@ async function openSettings(){
   document.getElementById('in-apikey').value=ST.apiKey;
   setMode(ST.mode,false);setPoll(ST.pollSec,false);
   
-  // IndexedDB 캐시 상태 확인
-  const c = await loadGeoFromCache();
+  // 현재 탭 연도 기준으로 캐시 확인
+  const targetYear = curEl().year;
+  const c = await loadGeoFromCache(targetYear);
   document.getElementById('cache-st').textContent = c?.ts 
-    ? `데이터베이스 캐시: ${Math.round((Date.now()-c.ts)/3600000)}시간 전 저장됨 (시도 ${c.sido?.features?.length||0}개 / 시군구 ${c.sigungu?.features?.length||0}개)`
-    : '캐시 없음 (SGIS 지도 갱신 필요)';
+    ? `데이터베이스 캐시: ${targetYear}년 지도(${Math.round((Date.now()-c.ts)/3600000)}시간 전)`
+    : `${targetYear}년 캐시 없음 (SGIS 지도 갱신 필요)`;
     
   document.getElementById('settings-overlay').classList.add('on');
 }
@@ -1375,13 +1438,6 @@ function setPoll(s){
 // ════════════════════════════════════════════
 setInterval(()=>{document.getElementById('time-str').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
 
-function renderAll(){
-  if(ST.sigunguGeo)preprocessSggColors(ST.currentSgId);
-  if(!_mapInitialized)initMapLayers();
-  else updateMapColors();
-  renderList();renderSummaryBar();
-}
-
 let _resizeTimer=null;
 window.addEventListener('resize',()=>{
   clearTimeout(_resizeTimer);
@@ -1396,7 +1452,10 @@ ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
 ST.mode=localStorage.getItem('el_mode')||'mock';
 ST.pollSec=parseInt(localStorage.getItem('el_poll')||'30');
 
-renderTabs();updateHeader();loadGeo();
+renderTabs();updateHeader();
+// 초기에는 현재 선택된 선거의 연도로 지도를 로드
+loadGeo(curEl().year);
+
 setTimeout(()=>{
   const now=new Date(); const elDay=new Date('2026-06-03T18:00:00+09:00');
   if(now >= elDay && !ST.isLive && ST.mode==='real' && ST.apiKey){ toggleLive(); }
