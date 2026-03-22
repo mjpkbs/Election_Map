@@ -594,26 +594,26 @@ async function loadVWorldGeo(){
     const sggFC=await fetchVWorldLayer('LT_C_ADSIGG_INFO',1000);
     const sidoGeo=normGeo(sidoFC);
     const sigunguGeo=normGeo(sggFC);
-    // sido 코드/이름 추가 주입 (normGeo에서 이미 처리하지만 확실히)
+    // sido 코드/이름 추가 주입
     sigunguGeo.features.forEach(f=>{
       const cd=String(f.properties.SIGUNGU_CD||f.properties.sig_cd||f.properties.code||f.properties.CD_SIGUNGU||'');
       if(cd&&cd.length>=2)f.properties.sido=cd.slice(0,2);
-      // full_nm에서 시도명 추출
       const fn=f.properties.full_nm||'';
       if(fn&&!f.properties.sidoName){
         const sFound=SIDO_ALL.find(s=>fn.startsWith(s));
         if(sFound)f.properties.sidoName=sFound;
       }
     });
-    try{localStorage.setItem('el_geo_cache',JSON.stringify({sido:sidoGeo,sigungu:sigunguGeo,ts:Date.now()}));}
+    try{localStorage.setItem('el_geo_cache',JSON.stringify({sido:sidoGeo,sigungu:sigunguGeo,ts:Date.now(),src:'vworld'}));}
     catch(e){console.warn('캐시 저장 실패',e.message);}
     ST.sidoGeo=sidoGeo;ST.sigunguGeo=sigunguGeo;ST.geoLoaded=true;
     if(st)st.textContent=`✅ VWorld ${new Date().toLocaleString('ko-KR')} 갱신`;
     document.getElementById('loading-wrap').style.display='none';
+    preprocessSggColors(ST.currentSgId);  // 색상 사전계산 보장
     renderAll();
   }catch(e){
     if(st)st.textContent=`❌ ${e.message}`;
-    throw e;
+    throw e;  // loadGeo의 catch로 전파
   }finally{
     if(btn){btn.disabled=false;btn.textContent='🗺 VWorld 지도 갱신';}
   }
@@ -714,50 +714,60 @@ function normGeo(geo){
 async function loadGeo(){
   document.getElementById('loading-txt').textContent='지도 데이터 로딩 중...';
 
-  // 1. 로컬 geo/ 파일 항상 최우선 시도 (.geojson → .json 순)
-  //    (로컬 파일이 있으면 캐시/API보다 우선 — 항상 최신 파일 반영)
-  const localSrcs=[
-    {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
-    {sido:'./geo/sido.json',  sigungu:'./geo/sigungu.json'},
-  ];
-  for(const src of localSrcs){
-    const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
-    if(s&&sg){
-      console.log('[GeoJSON] 로컬 파일 로드:', src.sido);
-      ST.sidoGeo=normGeo(s);ST.sigunguGeo=normGeo(sg);ST.geoLoaded=true;
-      document.getElementById('loading-wrap').style.display='none';
-      preprocessSggColors(ST.currentSgId);
-      renderAll();return;
+  // 공통 완료 처리
+  function _applyGeo(sidoGeo,sigunguGeo,src){
+    ST.sidoGeo=sidoGeo;ST.sigunguGeo=sigunguGeo;ST.geoLoaded=true;
+    console.log('[GeoJSON] 로드 완료:', src);
+    document.getElementById('loading-wrap').style.display='none';
+    preprocessSggColors(ST.currentSgId);
+    renderAll();
+  }
+
+  // ── 1순위: VWorld API (키가 있으면 최신 경계 우선) ──────────────
+  if(ST.vworldKey){
+    try{
+      document.getElementById('loading-txt').textContent='VWorld API 로딩 중...';
+      await loadVWorldGeo();  // 내부에서 _applyGeo 역할 수행
+      return;
+    }catch(e){
+      console.warn('[VWorld] 실패, 다음 소스로:', e.message);
     }
   }
 
-  // 2. localStorage 캐시 (로컬 파일 없을 때)
+  // ── 2순위: localStorage 캐시 ────────────────────────────────────
   try{
     const cached=JSON.parse(localStorage.getItem('el_geo_cache')||'null');
     if(cached?.sido?.features&&cached?.sigungu?.features){
-      console.log('[GeoJSON] 캐시 사용');
-      ST.sidoGeo=cached.sido;ST.sigunguGeo=cached.sigungu;ST.geoLoaded=true;
-      document.getElementById('loading-wrap').style.display='none';
-      preprocessSggColors(ST.currentSgId);
-      renderAll();return;
+      _applyGeo(cached.sido,cached.sigungu,'캐시');
+      return;
     }
   }catch{}
 
-  // 3. VWorld API (키가 있으면)
-  if(ST.vworldKey){
-    try{
-      document.getElementById('loading-txt').textContent='VWorld API로 최신 지도 로딩 중...';
-      await loadVWorldGeo();return;
-    }catch(e){console.warn('VWorld 실패, CDN fallback:',e.message);}
+  // ── 3순위: 로컬 geo/ 파일 (.geojson → .json) ─────────────────────
+  const localSrcs=[
+    {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
+    {sido:'./geo/sido.json',   sigungu:'./geo/sigungu.json'},
+  ];
+  for(const src of localSrcs){
+    document.getElementById('loading-txt').textContent=`로컬 파일 로딩: ${src.sido.split('/').pop()}`;
+    const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
+    if(s&&sg){
+      _applyGeo(normGeo(s),normGeo(sg),src.sido);
+      return;
+    }
   }
 
-  // 4. CDN fallback
+  // ── 4순위: CDN fallback (GADM) ────────────────────────────────────
   const cdnSrcs=GEO_SRCS.filter(s=>s.sido.startsWith('http'));
   for(const src of cdnSrcs){
     document.getElementById('loading-txt').textContent=`CDN 로딩: ${src.sido.split('/').pop()}`;
     const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
-    if(s&&sg){ST.sidoGeo=normGeo(s);ST.sigunguGeo=normGeo(sg);ST.geoLoaded=true;document.getElementById('loading-wrap').style.display='none';preprocessSggColors(ST.currentSgId);renderAll();return;}
+    if(s&&sg){
+      _applyGeo(normGeo(s),normGeo(sg),src.sido);
+      return;
+    }
   }
+
   document.getElementById('loading-txt').textContent='지도 로딩 실패 — 설정에서 VWorld 키를 입력하세요';
 }
 
