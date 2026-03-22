@@ -76,41 +76,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 #tooltip{position:absolute;pointer-events:none;z-index:25;min-width:180px;background:rgba(4,6,14,.97);border:1px solid var(--border2);border-radius:7px;padding:11px 13px;display:none;backdrop-filter:blur(10px);box-shadow:0 8px 32px rgba(0,0,0,.75);}
 #tooltip.on{display:block;}
 
-/* ── 인셋 패널 ── */
-#inset-panel{
-  position:absolute;z-index:40;display:none;
-  background:rgba(4,6,14,.97);border:1px solid var(--border2);
-  border-radius:8px;box-shadow:0 16px 48px rgba(0,0,0,.85);
-  backdrop-filter:blur(12px);
-  width:340px;
-  overflow:hidden;
-  animation:fadeInScale .2s ease-out;
-}
-#inset-panel.on{display:block;}
-@keyframes fadeInScale{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
-#inset-header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:10px 13px 8px;border-bottom:1px solid var(--border2);
-  background:rgba(8,12,24,.8);
-}
-#inset-title{font-size:13px;font-weight:700;}
-#inset-subtitle{font-size:10px;color:var(--sub);margin-top:1px;}
-#inset-close{background:none;border:none;color:var(--sub);cursor:pointer;font-size:16px;padding:0 2px;line-height:1;font-family:inherit;}
-#inset-close:hover{color:var(--text);}
-#inset-body{display:flex;gap:0;}
-#inset-map-wrap{flex:1;min-height:260px;position:relative;}
-#inset-svg{width:100%;height:100%;display:block;}
-#inset-results{width:130px;flex-shrink:0;padding:10px 10px;border-left:1px solid var(--border2);overflow-y:auto;max-height:310px;}
-#inset-results::-webkit-scrollbar{width:3px;}
-#inset-results::-webkit-scrollbar-thumb{background:var(--border2);}
-.ir-section{font-size:10px;color:var(--dim);font-weight:700;margin-bottom:5px;letter-spacing:.5px;}
-.ir-row{display:flex;align-items:center;gap:5px;margin-bottom:4px;cursor:default;}
-.ir-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
-.ir-name{font-size:11px;color:#a8b0c8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.ir-party{font-size:10px;font-weight:700;flex-shrink:0;}
-#inset-footer{padding:7px 13px;border-top:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;background:rgba(6,8,18,.7);}
-.inset-chip{font-size:10px;padding:2px 7px;border-radius:2px;font-weight:700;}
-#inset-note{font-size:10px;color:var(--dim);}
+
 
 /* ── 범례 ── */
 #legend{position:absolute;bottom:14px;right:14px;background:rgba(4,6,14,.92);border:1px solid var(--border);border-radius:6px;padding:8px 12px;backdrop-filter:blur(6px);z-index:10;}
@@ -208,23 +174,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <svg id="map-svg"></svg>
 
     <!-- 시도 클릭 시 인셋 패널 -->
-    <div id="inset-panel">
-      <div id="inset-header">
-        <div>
-          <div id="inset-title"></div>
-          <div id="inset-subtitle"></div>
-        </div>
-        <button id="inset-close" onclick="hideInset()">✕</button>
-      </div>
-      <div id="inset-body">
-        <div id="inset-map-wrap"><svg id="inset-svg"></svg></div>
-        <div id="inset-results"></div>
-      </div>
-      <div id="inset-footer">
-        <div id="inset-chips"></div>
-        <div id="inset-note"></div>
-      </div>
-    </div>
+
 
     <!-- 맵 툴바 -->
     <div id="map-toolbar">
@@ -779,7 +729,7 @@ async function fetchSGISGeo(){
 function clearGeoCache(){localStorage.removeItem('el_geo_cache');document.getElementById('cache-st').textContent='캐시 삭제됨';}
 
 // ════════════════════════════════════════════
-//  메인 지도 렌더
+//  메인 지도 렌더 (D3 zoom 드릴다운)
 // ════════════════════════════════════════════
 let _proj=null,_path=null;
 
@@ -788,30 +738,54 @@ function renderMap(){
   const svgEl=document.getElementById('map-svg');
   const W=svgEl.clientWidth||700,H=svgEl.clientHeight||600;
   const svg=d3.select('#map-svg').attr('viewBox',`0 0 ${W} ${H}`);
-  svg.selectAll('*').remove();
+
+  // zoom 초기화 (최초 1회)
+  if(!ST.zoomBehavior){
+    ST.zoomBehavior=d3.zoom().scaleExtent([1,20]).on('zoom',ev=>{
+      ST.currentTransform=ev.transform;
+      const k=ev.transform.k;
+      svg.select('#map-g').attr('transform',ev.transform);
+      svg.selectAll('.sido-p').attr('stroke-width',.7/k);
+      svg.selectAll('.sgg-path').attr('stroke-width',.4/k);
+      // 레이블 위치 재계산 (스케일 보정)
+      svg.selectAll('.sido-lbl').attr('transform',d=>{
+        const ct=_path.centroid(d);
+        return `translate(${ev.transform.applyX(ct[0])},${ev.transform.applyY(ct[1])}) scale(${1/k})`;
+      });
+      svg.selectAll('.sgg-lbl').attr('transform',d=>{
+        const ct=_path.centroid(d);
+        return `translate(${ev.transform.applyX(ct[0])},${ev.transform.applyY(ct[1])}) scale(${1/k})`;
+      });
+    });
+    svg.call(ST.zoomBehavior);
+    svg.on('dblclick.zoom',null);
+  }
+
+  // g 재사용
+  let g=svg.select('#map-g');
+  if(g.empty())g=svg.append('g').attr('id','map-g');
+
+  // 시도 레이어
+  let sidoLayer=g.select('#sido-layer');
+  if(sidoLayer.empty())sidoLayer=g.append('g').attr('id','sido-layer');
   _proj=d3.geoMercator().fitExtent([[18,18],[W-18,H-18]],ST.sidoGeo);
   _path=d3.geoPath().projection(_proj);
-  const g=svg.append('g');
 
-  g.selectAll('.sido-p').data(ST.sidoGeo.features).join('path')
+  sidoLayer.selectAll('.sido-p').data(ST.sidoGeo.features).join('path')
     .attr('class','sido-p').attr('d',_path)
     .attr('fill',d=>{
       const p=d.properties;
-      // 1순위: normGeo가 설정한 name
       let nm=p.name?normName(p.name):'';
       if(nm&&ST.data[nm])return pc(ST.data[nm].winner);
-      // 2순위: 원본 속성에서 직접 시도명 추출
-      const sidoNm=extractSidoName(p);
-      if(sidoNm&&ST.data[sidoNm])return pc(ST.data[sidoNm].winner);
-      // 3순위: getGeoName → normName
+      const sn=extractSidoName(p);
+      if(sn&&ST.data[sn])return pc(ST.data[sn].winner);
       const raw=normName(getGeoName(p));
       if(raw&&ST.data[raw])return pc(ST.data[raw].winner);
-      // 4순위: SIDO_ALL 부분매칭
       if(raw){const m=SIDO_ALL.find(s=>s===raw||s.includes(raw)||raw.includes(s.replace(/특별시$|광역시$|특별자치시$|특별자치도$/,'')));if(m&&ST.data[m])return pc(ST.data[m].winner);}
       return '#111a30';
     })
     .attr('stroke','#04060e').attr('stroke-width',.7)
-    .attr('opacity',d=>{if(!ST.selectedSido)return 1;const nm=normName(d.properties.name||'')||extractSidoName(d.properties)||normName(getGeoName(d.properties));return nm===ST.selectedSido?1:.45;})
+    .attr('opacity',d=>ST.selectedSido?( getSidoNameFromProps(d.properties)===ST.selectedSido?1:.3 ):1)
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
       if(!ST.selectedSido)d3.select(this).attr('opacity',.72);
@@ -827,167 +801,161 @@ function renderMap(){
     })
     .on('click',(ev,d)=>{
       const nm=getSidoNameFromProps(d.properties);
-      if(ST.selectedSido===nm){hideInset();ST.selectedSido=null;d3.selectAll('.sido-p').attr('opacity',1);}
-      else{ST.selectedSido=nm;d3.selectAll('.sido-p').attr('opacity',f=>getSidoNameFromProps(f.properties)===nm?1:.45);showDetail(nm);showInset(nm,ev,W,H);}
+      if(ST.selectedSido===nm)drillUp(); else drillDown(nm);
     });
 
-  // 레이블
+  // 시도 레이블
+  let lblLayer=g.select('#lbl-layer');
+  if(lblLayer.empty())lblLayer=g.append('g').attr('id','lbl-layer');
+  lblLayer.selectAll('.sido-lbl').data(ST.sidoGeo.features).join('text')
+    .attr('class','sido-lbl')
+    .attr('transform',d=>{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]})`;})
+    .attr('text-anchor','middle').attr('dominant-baseline','middle')
+    .attr('font-family',"'Noto Sans KR',sans-serif")
+    .attr('font-size',d=>getSidoNameFromProps(d.properties)==='경기도'?'13':'11')
+    .attr('font-weight','700').attr('fill','rgba(255,255,255,.88)').attr('pointer-events','none')
+    .attr('opacity',d=>{
+      if(!ST.showLabels)return 0;
+      if(!ST.selectedSido)return 1;
+      return getSidoNameFromProps(d.properties)===ST.selectedSido?1:0;
+    })
+    .text(d=>shortSido(getSidoNameFromProps(d.properties)));
+
+  // 시군구 레이어 (드릴다운 상태 복원)
+  if(ST.selectedSido)_renderSggLayer(g, ST.selectedSido);
+
+  renderLegend();
+  if(ST.selectedSido){showDetail(ST.selectedSido);buildSggResultPanel(ST.selectedSido);}
+}
+
+// 시군구 레이어 생성 (메인 지도 위에 오버레이)
+function _renderSggLayer(g, sidoName){
+  g.select('#sgg-layer').remove();
+  if(!ST.sigunguGeo)return;
+  const code=SIDO_CODE[sidoName]||'';
+  const sggFeatures=ST.sigunguGeo.features.filter(f=>{
+    const p=f.properties;
+    // SIGUNGU_CD 앞 자리로 시도 코드 매칭
+    const cd=String(p.SIGUNGU_CD||p.code||getGeoCode(p)||'');
+    if(code&&cd&&cd.startsWith(code))return true;
+    // sido 필드 직접 비교
+    if(p.sido&&code&&String(p.sido)===code)return true;
+    // SIDO_NM 비교
+    const sn=String(p.SIDO_NM||p.NM_SIDO||p.sido_nm||'').trim();
+    if(sn&&normName(sn)===sidoName)return true;
+    return false;
+  });
+  console.log('[드릴다운]',sidoName,'시군구',sggFeatures.length,'개, code:',code);
+  if(!sggFeatures.length)return;
+
+  const sggLayer=g.append('g').attr('id','sgg-layer');
+
+  sggLayer.selectAll('.sgg-path').data(sggFeatures).join('path')
+    .attr('class','sgg-path')
+    .attr('d',d=>{try{return _path(d);}catch{return '';}})
+    .attr('fill',d=>{
+      const rawNm=d.properties.name||extractSggName(d.properties)||getGeoName(d.properties);
+      const party=getSggParty(sidoName,rawNm,ST.currentSgId);
+      if(party)return pc(party);
+      const sido=ST.data[sidoName];return sido?pc(sido.winner)+'cc':'#1a2030';
+    })
+    .attr('stroke','rgba(0,0,0,.5)').attr('stroke-width',.4)
+    .style('cursor','pointer')
+    .on('mouseover',function(ev,d){
+      d3.select(this).attr('opacity',.75);
+      const rawNm=d.properties.name||extractSggName(d.properties)||getGeoName(d.properties);
+      const party=getSggParty(sidoName,rawNm,ST.currentSgId);
+      showSggTooltip(ev,rawNm,party,sidoName);
+    })
+    .on('mousemove',ev=>moveTooltip(ev,document.getElementById('map-svg').clientWidth))
+    .on('mouseout',function(){d3.select(this).attr('opacity',1);hideTooltip();});
+
   if(ST.showLabels){
-    g.selectAll('.sido-lbl').data(ST.sidoGeo.features).join('text')
-      .attr('class','sido-lbl').attr('transform',d=>{const c=_path.centroid(d);return `translate(${c[0]},${c[1]})`;})
+    sggLayer.selectAll('.sgg-lbl').data(sggFeatures).join('text')
+      .attr('class','sgg-lbl')
+      .attr('transform',d=>{try{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]})`;}catch{return 'translate(0,0)';}})
       .attr('text-anchor','middle').attr('dominant-baseline','middle')
       .attr('font-family',"'Noto Sans KR',sans-serif")
-      .attr('font-size',d=>getSidoNameFromProps(d.properties)==='경기도'?'13':'11')
-      .attr('font-weight','700').attr('fill','rgba(255,255,255,.88)').attr('pointer-events','none')
-      .text(d=>shortSido(getSidoNameFromProps(d.properties)));
+      .attr('font-size',sggFeatures.length>20?'7':'9').attr('font-weight','600')
+      .attr('fill','rgba(255,255,255,.9)').attr('pointer-events','none')
+      .text(d=>(d.properties.name||extractSggName(d.properties)||'').replace(/시$|구$|군$/,'').slice(0,4));
   }
-  renderLegend();
-  if(ST.selectedSido)showDetail(ST.selectedSido);
 }
 
-// ════════════════════════════════════════════
-//  인셋 패널 (시군구 지도)
-// ════════════════════════════════════════════
-function showInset(sidoName,clickEvent,mapW,mapH){
-  const panel=document.getElementById('inset-panel');
-  const noSgg=NO_SGG.includes(sidoName);
-  document.getElementById('inset-title').textContent=sidoName;
-  const sggData=D_SGG[ST.currentSgId]?.[sidoName];
-  document.getElementById('inset-subtitle').textContent=
-    noSgg?'기초단체장 선거 없음':
-    sggData?`기초단체장 결과`:
-    '광역단체장 결과 기준';
+// 시도 클릭 → 줌인 + 시군구 표시
+function drillDown(sidoName){
+  ST.selectedSido=sidoName;
+  document.getElementById('btn-back').style.display='block';
 
-  // 위치 계산: 클릭 위치 기준
-  const mapRect=document.getElementById('map-area').getBoundingClientRect();
-  const cx=clickEvent.clientX-mapRect.left;
-  const cy=clickEvent.clientY-mapRect.top;
-  const pw=340,ph=370;
-  let px=cx+18,py=cy-ph/2;
-  if(px+pw>mapW-10)px=cx-pw-18;
-  if(px<10)px=10;
-  if(py<10)py=10;
-  if(py+ph>mapH-10)py=mapH-ph-10;
-  panel.style.left=px+'px';panel.style.top=py+'px';
+  // 시도 투명도 업데이트
+  d3.selectAll('.sido-p').attr('opacity',d=>getSidoNameFromProps(d.properties)===sidoName?1:.3);
+  d3.selectAll('.sido-lbl').attr('opacity',d=>getSidoNameFromProps(d.properties)===sidoName?(ST.showLabels?1:0):0);
 
-  // 시군구 features 필터
-  const code=SIDO_CODE[sidoName]||'';
-  const sggFeatures=ST.sigunguGeo?ST.sigunguGeo.features.filter(f=>{
-    const p=f.properties;
-    // 1) normGeo가 주입한 sido/sidoName
-    if(p.sidoName&&p.sidoName===sidoName)return true;
-    // 2) sig_cd 앞 2자리 = sido 코드
-    const rawCode=String(p.SIGUNGU_CD||p.SIDO_CD||p.sig_cd||p.SIG_CD||p.CD_SIGUNGU||p.code||getGeoCode(p)||'');
-    if(rawCode&&code&&rawCode.startsWith(code))return true;
-    // 3) NM_SIDO 직접 비교 (normName 적용)
-    const sidoRaw=p.SIDO_NM||p.NM_SIDO||p.sido_nm||p.sig_sido_nm||'';
-    if(sidoRaw&&normName(String(sidoRaw).trim())===sidoName)return true;
-    // 4) full_nm: "서울특별시 종로구" → 앞부분 추출
-    const fullNm=String(p.full_nm||p.FULL_NM||'');
-    if(fullNm&&SIDO_ALL.some(s=>fullNm.startsWith(s)&&normName(fullNm.split(' ')[0])===sidoName))return true;
-    // 5) gadm NAME_1
-    return normName(p.NAME_1||p.name||'')===sidoName;
-  }):[];
+  // 시군구 레이어
+  const g=d3.select('#map-g');
+  _renderSggLayer(g,sidoName);
 
-  // 인셋 지도 SVG
-  const ISVG=document.getElementById('inset-svg');
-  const IW=ISVG.parentElement.clientWidth||210,IH=310;
-  ISVG.setAttribute('viewBox',`0 0 ${IW} ${IH}`);
-  ISVG.style.height=IH+'px';
-  d3.select('#inset-svg').selectAll('*').remove();
-
-  if(sggFeatures.length>0){
-    const geoFC={type:'FeatureCollection',features:sggFeatures};
-    const proj2=d3.geoMercator().fitExtent([[8,8],[IW-8,IH-8]],geoFC);
-    const path2=d3.geoPath().projection(proj2);
-    const ig=d3.select('#inset-svg').append('g');
-
-    // 시도 배경
-    ig.selectAll('.i-sido').data(ST.sidoGeo.features.filter(f=>getSidoNameFromProps(f.properties)===sidoName)).join('path')
-      .attr('class','i-sido').attr('d',d=>{try{return path2(d);}catch{return '';}})
-      .attr('fill',()=>{const d2=ST.data[sidoName];return d2?pc(d2.winner)+'33':'#1a2030';})
-      .attr('stroke','none');
-
-    // 시군구
-    ig.selectAll('.i-sgg').data(sggFeatures).join('path')
-      .attr('class','i-sgg').attr('d',d=>{try{return path2(d);}catch{return '';}})
-      .attr('fill',d=>{
-        const rawName=d.properties.name||extractSggName(d.properties)||getGeoName(d.properties);
-        const party=getSggParty(sidoName,rawName,ST.currentSgId);
-        if(party)return pc(party);
-        const sido=ST.data[sidoName];return sido?pc(sido.winner)+'cc':'#1a2030';
-      })
-      .attr('stroke','rgba(0,0,0,.6)').attr('stroke-width',.35)
-      .style('cursor','default')
-      .on('mouseover',function(ev,d){
-        d3.select(this).attr('opacity',.72);
-        const rawName=d.properties.name||extractSggName(d.properties)||getGeoName(d.properties);
-        const party=getSggParty(sidoName,rawName,ST.currentSgId);
-        const IRect=document.getElementById('inset-panel').getBoundingClientRect();
-        showInsetTooltip(ev,rawName,party,IRect);
-      })
-      .on('mouseout',function(){d3.select(this).attr('opacity',1);hideTooltip();});
-
-    // 시군구 레이블 (작은 지역만)
-    if(sggFeatures.length<=30){
-      ig.selectAll('.i-lbl').data(sggFeatures).join('text')
-        .attr('class','i-lbl').attr('transform',d=>{try{const c=path2.centroid(d);return `translate(${c[0]},${c[1]})`;}catch{return 'translate(0,0)';}})
-        .attr('text-anchor','middle').attr('dominant-baseline','middle')
-        .attr('font-size',sggFeatures.length>20?'6':'7').attr('font-weight','600')
-        .attr('fill','rgba(255,255,255,.82)').attr('pointer-events','none')
-        .attr('font-family',"'Noto Sans KR',sans-serif")
-        .text(d=>(extractSggName(d.properties)||d.properties.name||getGeoName(d.properties)).replace(/시$|구$|군$|읍$|면$/,'').slice(0,4));
+  // 해당 시도 zoom
+  const feat=ST.sidoGeo.features.find(f=>getSidoNameFromProps(f.properties)===sidoName);
+  if(feat&&ST.zoomBehavior&&_path){
+    const svgEl=document.getElementById('map-svg');
+    const W=svgEl.clientWidth||700,H=svgEl.clientHeight||600;
+    const[[x0,y0],[x1,y1]]=_path.bounds(feat);
+    const pw=x1-x0,ph=y1-y0;
+    if(pw>0&&ph>0){
+      const scale=Math.min(18,0.82/Math.max(pw/W,ph/H));
+      const tx=W/2-scale*(x0+pw/2),ty=H/2-scale*(y0+ph/2);
+      d3.select('#map-svg').transition().duration(650)
+        .call(ST.zoomBehavior.transform,d3.zoomIdentity.translate(tx,ty).scale(scale));
     }
-  }else{
-    d3.select('#inset-svg').append('text').attr('x',IW/2).attr('y',IH/2)
-      .attr('text-anchor','middle').attr('fill','var(--sub)').attr('font-size','12').text('지도 데이터 없음');
   }
 
-  // 우측 결과 목록
-  buildInsetResults(sidoName,sggData,noSgg);
-
-  // 하단 칩
-  buildInsetFooter(sidoName,sggData,noSgg);
-
-  panel.classList.add('on');
+  showDetail(sidoName);
+  buildSggResultPanel(sidoName);
 }
 
-function buildInsetResults(sidoName,sggData,noSgg){
-  const el=document.getElementById('inset-results');
-  if(!sggData||noSgg){
-    el.innerHTML=`<div style="font-size:11px;color:var(--dim);margin-top:8px;line-height:1.7">${noSgg?'기초단체장<br>선거 없음':'결과 없음'}</div>`;return;
+// 전국으로 돌아가기
+function drillUp(){
+  ST.selectedSido=null;
+  document.getElementById('btn-back').style.display='none';
+  d3.select('#sgg-layer').remove();
+  d3.selectAll('.sido-p').attr('opacity',1);
+  d3.selectAll('.sido-lbl').attr('opacity',ST.showLabels?1:0);
+  d3.select('#map-svg').transition().duration(600)
+    .call(ST.zoomBehavior.transform,d3.zoomIdentity);
+  ST.currentTransform=d3.zoomIdentity;
+  clearDetail();
+  renderList();
+}
+
+// 우측 패널 하단: 기초단체장 목록
+function buildSggResultPanel(sidoName){
+  const sgId=ST.currentSgId;
+  const sggData=D_SGG[sgId]?.[sidoName]||D_SGG['20220601']?.[sidoName];
+  const noSgg=NO_SGG.includes(sidoName);
+  const listEl=document.getElementById('sido-list');
+  if(noSgg){
+    listEl.innerHTML='<div style="padding:10px 8px;font-size:11px;color:var(--dim)">기초단체장 선거 없음</div>';return;
   }
-  const counts={};
-  Object.entries(sggData).forEach(([nm,party])=>{counts[party]=(counts[party]||0)+1;});
-  let html=`<div class="ir-section">기초단체장 결과</div>`;
-  // 정당별 합계
-  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([p,n])=>{
-    html+=`<div class="ir-row"><div class="ir-dot" style="background:${pc(p)}"></div><span class="ir-name">${ps(p)}</span><span class="ir-party" style="color:${pc(p)}">${n}석</span></div>`;
-  });
-  html+=`<div class="ir-section" style="margin-top:8px">시군구별</div>`;
-  Object.entries(sggData).forEach(([nm,party])=>{
-    html+=`<div class="ir-row"><div class="ir-dot" style="background:${pc(party)}"></div><span class="ir-name">${nm}</span><span class="ir-party" style="color:${pc(party)}">${ps(party)}</span></div>`;
-  });
-  el.innerHTML=html;
-}
-
-function buildInsetFooter(sidoName,sggData,noSgg){
-  const chips=document.getElementById('inset-chips');
-  const note=document.getElementById('inset-note');
-  if(!sggData||noSgg){chips.innerHTML='';note.textContent=noSgg?'※ 기초선거 없음':'';return;}
+  if(!sggData){
+    listEl.innerHTML='<div style="padding:10px 8px;font-size:11px;color:var(--dim)">기초단체장 데이터 없음<br>(광역단체장 기준 색상)</div>';return;
+  }
   const counts={};
   Object.entries(sggData).forEach(([,p])=>{counts[p]=(counts[p]||0)+1;});
-  chips.innerHTML=Object.entries(counts).sort((a,b)=>b[1]-a[1])
-    .map(([p,n])=>`<span class="inset-chip" style="background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}</span>`).join(' ');
-  note.textContent='기초단체장';
+  const shortNm=sidoName.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
+  let html=`<div id="list-hdr" style="font-size:11px;color:var(--dim);font-weight:600;padding:4px 8px 5px">기초단체장 · ${shortNm}</div>`;
+  html+=`<div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 8px 8px">`;
+  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([p,n])=>{
+    html+=`<span style="font-size:11px;padding:2px 7px;border-radius:3px;font-weight:700;background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}</span>`;
+  });
+  html+=`</div>`;
+  Object.entries(sggData).forEach(([nm,party])=>{
+    html+=`<div class="srow"><div class="sdot" style="background:${pc(party)}"></div><div class="sname">${nm}</div><div class="sparty" style="color:${pc(party)}">${ps(party)}</div></div>`;
+  });
+  listEl.innerHTML=html;
 }
 
-function hideInset(){
-  document.getElementById('inset-panel').classList.remove('on');
-  ST.selectedSido=null;
-  d3.selectAll('.sido-p').attr('opacity',1);
-  clearDetail();
-}
+
 
 // ════════════════════════════════════════════
 //  TOOLTIP
@@ -1001,15 +969,11 @@ function showMainTooltip(ev,nm,mapW){
   d.cands.slice(0,3).forEach((c,i)=>{h+=`<div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name}</span><span style="color:${pc(c.party)};font-weight:700">${c.pct}%</span></div><div style="background:#0c1220;height:2px;border-radius:1px"><div style="width:${c.pct}%;height:100%;background:${pc(c.party)};opacity:${i===0?1:.4};border-radius:1px"></div></div></div>`;});
   tt.innerHTML=h;tt.classList.add('on');moveTooltip(ev,mapW);
 }
-function showInsetTooltip(ev,sggName,party,panelRect){
+function showSggTooltip(ev,sggName,party,sidoName){
   const tt=document.getElementById('tooltip');
-  const h=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">${sggName}</div>${party?`<div style="display:flex;align-items:center;gap:5px"><div style="width:7px;height:7px;border-radius:2px;background:${pc(party)}"></div><span style="font-size:11px;font-weight:700;color:${pc(party)}">${party}</span></div>`:'<div style="font-size:11px;color:var(--sub)">데이터 없음</div>'}`;
+  const h=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">${sggName}</div>${party?`<div style="display:flex;align-items:center;gap:5px"><div style="width:7px;height:7px;border-radius:2px;background:${pc(party)}"></div><span style="font-size:11px;font-weight:700;color:${pc(party)}">${party}</span></div><div style="font-size:10px;color:var(--dim);margin-top:3px">기초단체장</div>`:'<div style="font-size:11px;color:var(--sub)">집계 중</div>'}`;
   tt.innerHTML=h;tt.classList.add('on');
-  const mapRect=document.getElementById('map-area').getBoundingClientRect();
-  const x=ev.clientX-mapRect.left,y=ev.clientY-mapRect.top;
-  const tw=tt.offsetWidth+12;
-  tt.style.left=(x+tw>mapRect.width?x-tw:x+12)+'px';
-  tt.style.top=Math.min(y-10,mapRect.height-100)+'px';
+  moveTooltip(ev,document.getElementById('map-svg').clientWidth);
 }
 function moveTooltip(ev,mapW){
   const tt=document.getElementById('tooltip');if(!tt.classList.contains('on'))return;
@@ -1056,28 +1020,10 @@ function renderList(){
     const d=ST.data[nm];
     if(!d)return`<div class="srow" style="opacity:.2;pointer-events:none"><div class="sdot" style="background:#333"></div><div class="sname">${shortSido(nm)}</div></div>`;
     const c=pc(d.winner);
-    return`<div class="srow" id="sr-${nm}" onclick="clickListSido('${nm}')"><div class="sdot" style="background:${c}"></div><div class="sname">${shortSido(nm)}</div><div class="sparty" style="color:${c}">${ps(d.winner)}</div><div class="srate-wrap"><div class="srn">${typeof d.rate==='number'?d.rate.toFixed?d.rate.toFixed(0):d.rate:d.rate}%</div><div class="srb"><div class="srf" style="width:${d.rate}%;background:${c};opacity:.5"></div></div></div></div>`;
+    return`<div class="srow" id="sr-${nm}" onclick="drillDown('${nm}')"><div class="sdot" style="background:${c}"></div><div class="sname">${shortSido(nm)}</div><div class="sparty" style="color:${c}">${ps(d.winner)}</div><div class="srate-wrap"><div class="srn">${typeof d.rate==='number'?d.rate.toFixed?d.rate.toFixed(0):d.rate:d.rate}%</div><div class="srb"><div class="srf" style="width:${d.rate}%;background:${c};opacity:.5"></div></div></div></div>`;
   }).join('');
 }
-function clickListSido(nm){
-  document.querySelectorAll('.srow').forEach(e=>e.classList.remove('active'));
-  document.getElementById(`sr-${nm}`)?.classList.add('active');
-  showDetail(nm);
-  // 지도에서 해당 시도 하이라이트
-  if(_proj&&_path){
-    const feat=ST.sidoGeo?.features?.find(f=>getSidoNameFromProps(f.properties)===nm);
-    if(feat){
-      // 클릭 중심점 계산
-      const c=_path.centroid(feat);
-      const mapEl=document.getElementById('map-area');
-      const rect=mapEl.getBoundingClientRect();
-      const fakeEv={clientX:rect.left+c[0],clientY:rect.top+c[1]};
-      ST.selectedSido=nm;
-      d3.selectAll('.sido-p').attr('opacity',f=>getSidoNameFromProps(f.properties)===nm?1:.45);
-      showInset(nm,fakeEv,rect.width,rect.height);
-    }
-  }
-}
+
 
 // ════════════════════════════════════════════
 //  LEGEND
@@ -1093,7 +1039,15 @@ function renderLegend(){
 function toggleLabels(v){
   ST.showLabels=v;
   document.getElementById('lbl-btn').classList.toggle('on',v);
-  renderMap();
+  d3.selectAll('.sido-lbl').attr('opacity',v?(ST.selectedSido?0:1):0);
+  d3.selectAll('.sgg-lbl').attr('opacity',v?1:0);
+  if(!v){
+    d3.selectAll('.sido-lbl').attr('opacity',0);
+    d3.selectAll('.sgg-lbl').attr('opacity',0);
+  }else{
+    d3.selectAll('.sido-lbl').attr('opacity',d=>ST.selectedSido?(getSidoNameFromProps(d.properties)===ST.selectedSido?1:0):1);
+    d3.selectAll('.sgg-lbl').attr('opacity',1);
+  }
 }
 
 // ════════════════════════════════════════════
@@ -1101,24 +1055,62 @@ function toggleLabels(v){
 // ════════════════════════════════════════════
 function exportPNG(withLabels){
   const svgEl=document.getElementById('map-svg');
-  const W=svgEl.clientWidth*2,H=svgEl.clientHeight*2;
+  const SCALE=2; // 2배 해상도
+  const W=svgEl.clientWidth,H=svgEl.clientHeight;
+  const CW=W*SCALE,CH=H*SCALE;
+
   const clone=svgEl.cloneNode(true);
-  clone.setAttribute('width',W);clone.setAttribute('height',H);
+  clone.setAttribute('width',CW);
+  clone.setAttribute('height',CH);
+  clone.setAttribute('viewBox',`0 0 ${W} ${H}`);
   clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
   clone.style.background='transparent';
-  if(!withLabels)clone.querySelectorAll('.sido-lbl,.i-lbl').forEach(e=>e.remove());
-  else clone.querySelectorAll('text').forEach(t=>t.setAttribute('font-family','Arial,sans-serif'));
-  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml;charset=utf-8'}));
+
+  // 현재 zoom transform 반영 (줌인 상태면 그 상태로 저장)
+  const g=clone.querySelector('#map-g');
+  if(g&&ST.currentTransform){
+    const t=ST.currentTransform;
+    g.setAttribute('transform',`translate(${t.x},${t.y}) scale(${t.k})`);
+    // 선 두께 역보정
+    clone.querySelectorAll('.sido-p').forEach(p=>p.setAttribute('stroke-width',0.7/t.k));
+    clone.querySelectorAll('.sgg-path').forEach(p=>p.setAttribute('stroke-width',0.4/t.k));
+    // 레이블 scale 역보정
+    clone.querySelectorAll('.sido-lbl,.sgg-lbl').forEach(txt=>{
+      const tr=txt.getAttribute('transform')||'';
+      // scale 제거 후 font-size로 보정
+      const fs=parseFloat(txt.getAttribute('font-size')||'11');
+      txt.setAttribute('font-size',Math.max(3,fs/t.k));
+    });
+  }
+
+  if(!withLabels){
+    clone.querySelectorAll('.sido-lbl,.sgg-lbl').forEach(e=>e.remove());
+  }else{
+    clone.querySelectorAll('text').forEach(t=>t.setAttribute('font-family','Arial,sans-serif'));
+  }
+
+  const svgStr=new XMLSerializer().serializeToString(clone);
+  const url=URL.createObjectURL(new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'}));
   const img=new Image();
   img.onload=()=>{
-    const cv=document.createElement('canvas');cv.width=W;cv.height=H;
-    cv.getContext('2d').drawImage(img,0,0,W,H);
+    const cv=document.createElement('canvas');
+    cv.width=CW;cv.height=CH;
+    const ctx=cv.getContext('2d');
+    // 투명 배경 유지
+    ctx.clearRect(0,0,CW,CH);
+    ctx.drawImage(img,0,0,CW,CH);
     const a=document.createElement('a');
-    a.download=`election_${curEl().year}_${withLabels?'label':'clean'}.png`;
-    a.href=cv.toDataURL('image/png');a.click();
+    const suffix=ST.selectedSido?`_${ST.selectedSido.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'')}`:'_전국';
+    a.download=`election_${curEl().year}${suffix}_${withLabels?'글자':'지도만'}.png`;
+    a.href=cv.toDataURL('image/png');
+    a.click();
     URL.revokeObjectURL(url);
   };
-  img.onerror=()=>{const a=document.createElement('a');a.download=`election_${curEl().year}.svg`;a.href=url;a.click();};
+  img.onerror=()=>{
+    const a=document.createElement('a');
+    a.download=`election_${curEl().year}.svg`;
+    a.href=url;a.click();
+  };
   img.src=url;
 }
 
@@ -1129,7 +1121,7 @@ function renderTabs(){
   document.getElementById('election-tabs').innerHTML=ELECTIONS.map(e=>`<div class="etab${e.sgId===ST.currentSgId?' active':''}" onclick="switchElection('${e.sgId}')"><span class="tab-year">${e.year}</span> <span style="font-size:10px;opacity:.6">${e.round}</span> <span class="tab-badge ${e.status==='upcoming'?'upcoming':'done'}">${e.status==='upcoming'?'예정':'확정'}</span></div>`).join('');
 }
 async function switchElection(sgId){
-  if(ST.isLive)toggleLive();stopPolling();hideInset();
+  if(ST.isLive)toggleLive();stopPolling();drillUp();
   ST.currentSgId=sgId;ST.selectedSido=null;
   const ed=D_SIDO[sgId];
   if(ed){ST.data=JSON.parse(JSON.stringify(ed));ST.dataSource=curEl().status==='upcoming'?'mock':'builtin';}
@@ -1249,7 +1241,7 @@ function renderAll(){renderMap();renderList();renderSummaryBar();}
 // ════════════════════════════════════════════
 window.addEventListener('resize',()=>{if(ST.geoLoaded)renderMap();});
 // ESC 키로 인셋 닫기
-document.addEventListener('keydown',e=>{if(e.key==='Escape')hideInset();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ST.selectedSido)drillUp();});
 ST.apiKey=localStorage.getItem('el_apikey')||'';
 ST.proxyUrl=localStorage.getItem('el_proxy')||'';
 ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
