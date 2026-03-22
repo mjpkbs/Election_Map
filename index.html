@@ -489,22 +489,26 @@ const getGeoCode=p=>String(p.sig_cd||p.ctprvn_cd||p.CD_SIGUNGU||p.CD_SIDO||p.cod
 const shortSido=n=>n.replace('특별자치도','').replace('특별자치시','').replace('특별시','시').replace('광역시','시').replace(/^경상/,'경').replace(/^충청/,'충');
 
 function getSggParty(sidoName,sggRawName,sgId){
-  const tbl=D_SGG[sgId]?.[sidoName];
+  if(!sggRawName)return null;
+  // D_SGG에서 해당 연도+시도 테이블 가져오기
+  // 역대 선거 없으면 가장 최근 선거(2022) fallback
+  const tbl=D_SGG[sgId]?.[sidoName]||D_SGG['20220601']?.[sidoName];
   if(!tbl)return null;
-  // 직접 매칭 (한국어 그대로)
-  if(tbl[sggRawName])return tbl[sggRawName];
-  // 영어→한국어 변환 후 매칭
-  const kr=normSgg(sggRawName);
-  if(tbl[kr])return tbl[kr];
-  // 접미사 제거 후 유사 매칭
-  const base=kr.replace(/시$|구$|군$|읍$|면$|동$/,'');
-  for(const k of Object.keys(tbl)){
-    if(k===kr||k.replace(/시$|구$|군$/,'')===base)return tbl[k];
-  }
-  // sggRawName 접미사 제거도 시도
-  const base2=sggRawName.replace(/시$|구$|군$|읍$|면$|동$/,'');
-  for(const k of Object.keys(tbl)){
-    if(k.replace(/시$|구$|군$/,'')===base2)return tbl[k];
+
+  // 단계적 매칭
+  const candidates=[
+    sggRawName,                              // 직접
+    normSgg(sggRawName),                     // 영어→한국어
+    sggRawName.replace(/특별시|광역시|특별자치시|특별자치도|도$/,'').trim(), // 시도 접두어 제거
+  ];
+  for(const nm of candidates){
+    if(!nm)continue;
+    if(tbl[nm])return tbl[nm];
+    // 접미사 없는 버전으로 비교
+    const base=nm.replace(/시$|구$|군$/,'');
+    for(const k of Object.keys(tbl)){
+      if(k===nm||k.replace(/시$|구$|군$/,'')===base)return tbl[k];
+    }
   }
   return null;
 }
@@ -529,7 +533,11 @@ const isUpcoming=()=>curEl()?.status==='upcoming';
 //  GEO JSON
 // ════════════════════════════════════════════
 const GEO_SRCS=[
+  // .geojson 우선 (최신 파일)
+  {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
+  // .json 이전 버전 fallback
   {sido:'./geo/sido.json',sigungu:'./geo/sigungu.json'},
+  // CDN fallback
   {sido:'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-provinces-geo.json',sigungu:'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-municipalities-geo.json'},
   {sido:'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-provinces-geo.json',sigungu:'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-municipalities-geo.json'},
 ];
@@ -590,40 +598,64 @@ async function loadVWorldGeo(){
 function normGeo(geo){
   return{...geo,features:geo.features.map(f=>{
     const p=f.properties;
-    // NM_SIGUNGU/NM_SIDO: 사용자 파일 한국어 직접 사용
-    // sig_kor_nm/ctp_kor_nm: VWorld 한국어 직접 사용
-    const isKorean=p.NM_SIGUNGU||p.NM_SIDO||p.sig_kor_nm||p.ctp_kor_nm;
+    // 한국어 소스 우선: NM_SIGUNGU/NM_SIDO(사용자), sig_kor_nm/ctp_kor_nm(VWorld)
+    const isKorean=!!(p.NM_SIGUNGU||p.NM_SIDO||p.sig_kor_nm||p.ctp_kor_nm);
     const raw=getGeoName(p);
-    const nm=isKorean?raw:normName(normSgg(raw));
+    let nm=isKorean?raw:normName(normSgg(raw));
+    // SGIS/일부 파일: "서울특별시 종로구" 형태일 경우 → "종로구" 추출
+    // VWorld sig_kor_nm은 이미 "종로구" 형태
+    const sidoPrefixes=['서울특별시 ','부산광역시 ','대구광역시 ','인천광역시 ','광주광역시 ','대전광역시 ','울산광역시 ','세종특별자치시 ','경기도 ','강원특별자치도 ','강원도 ','충청북도 ','충청남도 ','전북특별자치도 ','전라북도 ','전라남도 ','경상북도 ','경상남도 ','제주특별자치도 '];
+    for(const pfx of sidoPrefixes){if(nm.startsWith(pfx)){nm=nm.slice(pfx.length);break;}}
     return{...f,properties:{...p,name:nm,code:getGeoCode(p)}};
   })};
 }
 
 async function loadGeo(){
   document.getElementById('loading-txt').textContent='지도 데이터 로딩 중...';
-  // 1. localStorage 캐시
+
+  // 1. 로컬 geo/ 파일 항상 최우선 시도 (.geojson → .json 순)
+  //    (로컬 파일이 있으면 캐시/API보다 우선 — 항상 최신 파일 반영)
+  const localSrcs=[
+    {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
+    {sido:'./geo/sido.json',  sigungu:'./geo/sigungu.json'},
+  ];
+  for(const src of localSrcs){
+    const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
+    if(s&&sg){
+      console.log('[GeoJSON] 로컬 파일 로드:', src.sido);
+      ST.sidoGeo=normGeo(s);ST.sigunguGeo=normGeo(sg);ST.geoLoaded=true;
+      document.getElementById('loading-wrap').style.display='none';
+      renderAll();return;
+    }
+  }
+
+  // 2. localStorage 캐시 (로컬 파일 없을 때)
   try{
     const cached=JSON.parse(localStorage.getItem('el_geo_cache')||'null');
     if(cached?.sido?.features&&cached?.sigungu?.features){
+      console.log('[GeoJSON] 캐시 사용');
       ST.sidoGeo=cached.sido;ST.sigunguGeo=cached.sigungu;ST.geoLoaded=true;
       document.getElementById('loading-wrap').style.display='none';
       renderAll();return;
     }
   }catch{}
-  // 2. VWorld API (키가 있으면 우선)
+
+  // 3. VWorld API (키가 있으면)
   if(ST.vworldKey){
     try{
       document.getElementById('loading-txt').textContent='VWorld API로 최신 지도 로딩 중...';
       await loadVWorldGeo();return;
-    }catch(e){console.warn('VWorld 로딩 실패, CDN fallback:',e.message);}
+    }catch(e){console.warn('VWorld 실패, CDN fallback:',e.message);}
   }
-  // 3. CDN / 로컬 파일 순차 시도
-  for(const src of GEO_SRCS){
-    document.getElementById('loading-txt').textContent=`지도 로딩: ${src.sido.split('/').pop()}`;
+
+  // 4. CDN fallback
+  const cdnSrcs=GEO_SRCS.filter(s=>s.sido.startsWith('http'));
+  for(const src of cdnSrcs){
+    document.getElementById('loading-txt').textContent=`CDN 로딩: ${src.sido.split('/').pop()}`;
     const[s,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
     if(s&&sg){ST.sidoGeo=normGeo(s);ST.sigunguGeo=normGeo(sg);ST.geoLoaded=true;document.getElementById('loading-wrap').style.display='none';renderAll();return;}
   }
-  document.getElementById('loading-txt').textContent='지도 로딩 실패 — 설정에서 VWorld/SGIS 키를 입력하세요';
+  document.getElementById('loading-txt').textContent='지도 로딩 실패 — 설정에서 VWorld 키를 입력하세요';
 }
 
 // ════════════════════════════════════════════
@@ -754,14 +786,21 @@ function showInset(sidoName,clickEvent,mapW,mapH){
   const code=SIDO_CODE[sidoName]||'';
   const sggFeatures=ST.sigunguGeo?ST.sigunguGeo.features.filter(f=>{
     const p=f.properties;
-    // 1) NM_SIDO 직접 비교 (사용자 파일)
-    if(p.NM_SIDO&&p.NM_SIDO===sidoName)return true;
-    // 2) 코드 앞자리 비교
-    const c=p.code||p.CD_SIGUNGU||getGeoCode(p);
-    if(c&&code&&String(c).startsWith(code))return true;
-    // 3) gadm NAME_1 영어→한국어 비교
-    const n1=normName(p.NAME_1||p.name||'');
-    return n1===sidoName;
+    // 1) NM_SIDO / sig_kor_nm 비교 (normName 적용 — '강원도'→'강원특별자치도' 등)
+    const sidoRaw=p.NM_SIDO||p.sig_sido_nm||'';
+    if(sidoRaw&&normName(sidoRaw)===sidoName)return true;
+    // 2) normGeo 이후 name 기반 (sido 기록이 name에 포함된 경우)
+    const nm=p.name||'';
+    if(nm&&normName(nm)===sidoName)return true;
+    // 3) 코드 앞자리 비교 (sig_cd 앞 2자리 = sido 코드)
+    const rawCode=p.sig_cd||p.CD_SIGUNGU||p.code||getGeoCode(p);
+    const strCode=String(rawCode);
+    if(strCode&&code&&strCode.startsWith(code))return true;
+    // 4) VWorld: 정규화된 name 안에 sido 이름 포함
+    const normNm=normName(p.name||p.sig_kor_nm||'');
+    if(normNm&&normName(normNm)===sidoName)return true;
+    // 5) gadm fallback
+    return normName(p.NAME_1||'')===sidoName;
   }):[];
 
   // 인셋 지도 SVG
