@@ -1520,25 +1520,18 @@ async function _necFetchDirect(necUrl){
   // 프록시가 있으면 무조건 프록시 경유, 없으면 직접 시도
   if(ST.proxyUrl){
     const url=ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`;
-    console.log('[무투표 프록시호출]', url);
     const r=await fetch(url);
-    console.log('[무투표 프록시 응답]', r.status);
     if(!r.ok) throw new Error(`프록시 HTTP ${r.status}`);
     const text=await r.text();
-    console.log('[무투표 body 앞150자]', text.slice(0,150));
     let j;
     try{ j=JSON.parse(text); }catch(e){
-      console.warn('[무투표] JSON 파싱 실패, body:', text.slice(0,200));
       throw new Error('JSON 파싱 실패');
     }
     const items=j?.response?.body?.items?.item??j?.body?.items?.item;
-    console.log('[무투표 items]', Array.isArray(items)?items.length+'건':items);
     return Array.isArray(items)?items:(items?[items]:null);
   }
   // 프록시 없는 경우 직접 시도 (로컬 개발환경 등)
-  console.log('[무투표 직접호출]', necUrl);
   const r=await fetch(necUrl,{headers:{'Accept':'application/json'}});
-  console.log('[무투표 직접호출 응답]', r.status);
   if(!r.ok) throw new Error(`직접 HTTP ${r.status}`);
   const text=await r.text();
   let j;
@@ -1585,8 +1578,6 @@ async function fetchOneSido(sgId,nm){
   let uncontested=false;
 
   // 무투표 당선: 후보 1명이고 총 득표수가 0
-  // yutusu/tusu 조건 제거 — 선관위 API는 sunsu(선거인수)만 있고
-  // yutusu/tusu가 0이 아닌 값으로 오는 케이스가 있음
   if(cands.length===1 && totalDugsu===0){
     uncontested=true;
     rate=100;
@@ -1610,8 +1601,13 @@ async function fetchAllSidoAPI(sgId){
   let done=0,success=0;
   const failed=[];
 
+  // 429 에러 방지를 위한 핵심 로직: 지연 호출 함수
+  const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
+  // 병렬 실행 수를 2개로 제한하여 서버 부하 감소
   const tasks=SIDO_ALL.map(nm=>async()=>{
     try{
+      await sleep(300); // 요청 간 0.3초 대기
       const r=await fetchOneSido(sgId,nm);
       if(r){ST.data[nm]=r;success++;}
     }catch(err){ failed.push(shortSido(nm)); }
@@ -1624,7 +1620,7 @@ async function fetchAllSidoAPI(sgId){
   });
 
   let idx = 0;
-  const workers = Array.from({length: 5}, async () => {
+  const workers = Array.from({length: 2}, async () => { // 동시 작업자를 5 -> 2로 축소
       while (idx < tasks.length) await tasks[idx++]();
   });
   await Promise.all(workers);
@@ -1660,7 +1656,14 @@ async function _necFetchAll(baseUrl){
   const numOfRows=100;
   if(totalCount<=numOfRows)return first;
   const pages=Math.ceil(totalCount/numOfRows);
-  const extras=await Promise.all(Array.from({length:pages-1},(_,i)=>_necFetch(baseUrl+`&pageNo=${i+2}`).catch(()=>null)));
+  
+  // 시군구 목록 로딩 시에도 지연 시간 추가
+  const extras = [];
+  for(let p=2; p<=pages; p++) {
+      await new Promise(res => setTimeout(res, 400));
+      const row = await _necFetch(baseUrl+`&pageNo=${p}`).catch(()=>null);
+      if(row) extras.push(row);
+  }
   const all=[...first];
   extras.forEach(e=>{if(e)all.push(...e);});
   return all;
@@ -1750,8 +1753,11 @@ async function fetchAllSggAPI(sgId){
   if(!D_SGG[sgId])D_SGG[sgId]={};
 
   let done=0,success=0;
+  const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+
   const tasks=SIDO_ALL.map(sidoNm=>async()=>{
     try{
+      await sleep(500); // 시군구 로딩은 더 무거우므로 지연을 더 길게
       const sggMap=await fetchSggBySido(sgId,sidoNm);
       if(sggMap&&Object.keys(sggMap).length){
         D_SGG[sgId][sidoNm]=sggMap;
@@ -1765,7 +1771,7 @@ async function fetchAllSggAPI(sgId){
   });
 
   let idx = 0;
-  const workers = Array.from({length: 5}, async () => {
+  const workers = Array.from({length: 2}, async () => {
       while (idx < tasks.length) await tasks[idx++]();
   });
   await Promise.all(workers);
@@ -1788,13 +1794,10 @@ async function fetchAllSggAPI(sgId){
 
 /**
  * 무투표선거구 당선인 API (WtvtelpcInfoInqireService)
- * 기초단체장(sgTypecode=4) 무투표 당선인을 가져와
- * D_SGG / ST.sggDetail의 해당 선거구를 'uncontested'로 마킹
  */
 async function fetchUncontestedSgg(sgId){
   const key = ST.uncApiKey || ST.apiKey;  // 무투표 전용 키 우선, 없으면 일반 키
   if(!key)return;
-  console.log('[무투표] fetchUncontestedSgg 시작, sgId=', sgId, '키:', key===ST.uncApiKey?'무투표전용':'일반키');
   try{
     const ENDPOINTS=[
       'getWtvtelpcsccnInfoInqire',
@@ -1804,18 +1807,13 @@ async function fetchUncontestedSgg(sgId){
     for(const ep of ENDPOINTS){
       const baseUrl=`https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/${ep}`
         +`?serviceKey=${encodeURIComponent(key)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json&pageNo=1`;
-      console.log('[무투표] 엔드포인트 시도:', ep);
       try{
         const r=await _necFetchDirect(baseUrl);
-        console.log('[무투표] 결과:', r?.length ?? '없음', '건');
         if(r&&r.length){rows=r;break;}
-      }catch(e){console.warn('[무투표]',ep,'예외:', e.message);}
+      }catch(e){}
+      await new Promise(res => setTimeout(res, 500)); // Endpoint 시도 간 지연
     }
-    if(!rows||!rows.length){
-      console.warn('[무투표] 두 엔드포인트 모두 데이터 없음');
-      return;
-    }
-    console.log('[무투표] 총', rows.length, '건 수신, 첫 행:', JSON.stringify(rows[0]).slice(0,150));
+    if(!rows||!rows.length) return;
 
     if(!D_UNCONTESTED[sgId])D_UNCONTESTED[sgId]={};
 
@@ -1830,26 +1828,19 @@ async function fetchUncontestedSgg(sgId){
         const aliases = NEC_SIDO_NAMES[s]||[s];
         return aliases.some(a=>sdName.includes(a)||a.includes(sdName));
       }) || sdName;
-      if(!sidoNm){ console.warn('[무투표] 시도명 매핑 실패:', sdName); return; }
+      if(!sidoNm) return;
 
       if(!D_UNCONTESTED[sgId][sidoNm])D_UNCONTESTED[sgId][sidoNm]=[];
       if(!D_UNCONTESTED[sgId][sidoNm].some(e=>e.sggName===sggName)){
         D_UNCONTESTED[sgId][sidoNm].push({sggName, party, candName});
-        console.log('[무투표 저장]', sidoNm, sggName, party, candName);
       }
     });
-
-    console.log('[무투표] D_UNCONTESTED 최종:', JSON.stringify(
-      Object.fromEntries(Object.entries(D_UNCONTESTED[sgId]||{}).map(([k,v])=>[k,v.length+'건']))
-    ));
 
     preprocessSggColors(sgId);
     updateMapColors();
     if(ST.selectedSido) buildSggResultPanel(ST.selectedSido);
 
-  }catch(e){
-    console.warn('[무투표 API 전체 예외]', e);
-  }
+  }catch(e){}
 }
 
 // ════════════════════════════════════════════
