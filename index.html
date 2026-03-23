@@ -984,8 +984,12 @@ function showMainTooltip(ev,nm,mapW){
   const tt=document.getElementById('tooltip');
   let h=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">${nm} <span style="font-size:10px;color:var(--dim);font-weight:400">광역단체장</span></div>`;
   h+=`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px"><div style="width:7px;height:7px;border-radius:2px;background:${pc(d.winner)}"></div><span style="font-size:12px;font-weight:700;color:${pc(d.winner)}">${d.winner}</span></div>`;
-  h+=`<div style="font-size:10px;color:var(--sub);margin-bottom:6px">개표율 ${d.rate}%</div>`;
-  d.cands.slice(0,3).forEach((c,i)=>{h+=`<div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name}</span><span style="color:${pc(c.party)};font-weight:700">${c.pct}%</span></div><div style="background:#0c1220;height:2px;border-radius:1px"><div style="width:${c.pct}%;height:100%;background:${pc(c.party)};opacity:${i===0?1:.4};border-radius:1px"></div></div></div>`;});
+  if(d.status==='uncontested'){
+    h+=`<div style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3);display:inline-block;margin-bottom:6px">무투표 당선</div>`;
+  }else{
+    h+=`<div style="font-size:10px;color:var(--sub);margin-bottom:6px">개표율 ${d.rate}%</div>`;
+    d.cands.slice(0,3).forEach((c,i)=>{h+=`<div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name}</span><span style="color:${pc(c.party)};font-weight:700">${c.pct}%</span></div><div style="background:#0c1220;height:2px;border-radius:1px"><div style="width:${c.pct}%;height:100%;background:${pc(c.party)};opacity:${i===0?1:.4};border-radius:1px"></div></div></div>`;});
+  }
   tt.innerHTML=h;tt.classList.add('on');moveTooltip(ev,mapW);
 }
 
@@ -1063,19 +1067,23 @@ function showDetail(name){
   const col=pc(d.winner);
   const b=document.getElementById('det-badge');
   const status=d.status||(d.rate===100?'final':d.rate!=null?'counting':'unknown');
-  const badgeText=status==='final'?`${d.winner} 당선`:status==='counting'?`${d.winner} 선두`:`집계 중`;
+  const badgeText=status==='uncontested'?`${d.winner} 무투표당선`:status==='final'?`${d.winner} 당선`:status==='counting'?`${d.winner} 선두`:`집계 중`;
   b.style.cssText=`background:${col}22;border:1px solid ${col}66;color:${col}`;
   b.textContent=badgeText;
   
   const ctxEl=document.getElementById('det-ctx');
   if(ctxEl)ctxEl.textContent=ST.selectedSido?'광역단체장':'광역단체장';
   
-  const rateStr=d.rate!=null?`${typeof d.rate==='number'?d.rate.toFixed(1):d.rate}%`:'집계 중';
-  const ratePct=d.rate!=null?Math.min(100,Math.max(0,d.rate)):0;
-  document.getElementById('det-rf').style.cssText=`width:${ratePct}%;background:${col}`;
+  const isUncontestedSido = status === 'uncontested';
+  const rateStr=isUncontestedSido?'무투표 당선':d.rate!=null?`${typeof d.rate==='number'?d.rate.toFixed(1):d.rate}%`:'집계 중';
+  const ratePct=isUncontestedSido?100:d.rate!=null?Math.min(100,Math.max(0,d.rate)):0;
+  document.getElementById('det-rf').style.cssText=`width:${ratePct}%;background:${isUncontestedSido?'#a78bfa':col}`;
   document.getElementById('det-rv').textContent=rateStr;
   
   document.getElementById('det-cands').innerHTML=(d.cands||[]).map((c2,i)=>{
+    if(isUncontestedSido){
+      return `<div class="dc"><div class="dc-row"><span style="color:var(--text);font-weight:700">${c2.name} <span style="color:${pc(c2.party)};font-size:10px">${ps(c2.party)}</span></span><span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span></div></div>`;
+    }
     const pct=typeof c2.pct==='number'&&!isNaN(c2.pct)?c2.pct:0;
     return `<div class="dc"><div class="dc-row"><span style="color:${i===0?'var(--text)':'var(--sub)'};font-weight:${i===0?700:400}">${c2.name} <span style="color:${pc(c2.party)};font-size:10px">${ps(c2.party)}</span></span><span style="font-weight:700;color:${pc(c2.party)}">${pct}%</span></div><div class="dcb"><div class="dcf" style="width:${pct}%;background:${pc(c2.party)};opacity:${i===0?1:.4}"></div></div><div class="dcv">${fmt(c2.votes)}표</div></div>`;
   }).join('');
@@ -1116,7 +1124,11 @@ function renderList(){
     const d=ST.data[nm];
     if(!d)return`<div class="srow" style="opacity:.2;pointer-events:none"><div class="sdot" style="background:#333"></div><div class="sname">${shortSido(nm)}</div></div>`;
     const c=pc(d.winner);
-    return`<div class="srow" id="sr-${nm}" onclick="drillDown('${nm}')"><div class="sdot" style="background:${c}"></div><div class="sname">${shortSido(nm)}</div><div class="sparty" style="color:${c}">${ps(d.winner)}</div><div class="srate-wrap"><div class="srn">${typeof d.rate==='number'?d.rate.toFixed?d.rate.toFixed(0):d.rate:d.rate}%</div><div class="srb"><div class="srf" style="width:${d.rate}%;background:${c};opacity:.5"></div></div></div></div>`;
+    const isUncont = d.status==='uncontested';
+    const rateHtml = isUncont
+      ? `<span style="font-size:9px;padding:1px 4px;border-radius:2px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span>`
+      : `<div class="srate-wrap"><div class="srn">${typeof d.rate==='number'?d.rate.toFixed?d.rate.toFixed(0):d.rate:d.rate}%</div><div class="srb"><div class="srf" style="width:${d.rate}%;background:${c};opacity:.5"></div></div></div>`;
+    return`<div class="srow" id="sr-${nm}" onclick="drillDown('${nm}')"><div class="sdot" style="background:${c}"></div><div class="sname">${shortSido(nm)}</div><div class="sparty" style="color:${c}">${ps(d.winner)}</div>${rateHtml}</div>`;
   }).join('');
 }
 function renderLegend(){
@@ -1514,6 +1526,7 @@ async function fetchUncontestedSgg(sgId){
     rows.forEach(row=>{
       const sdName  = String(row.sdName||'').trim();
       const sggName = String(row.sggName||'').trim();
+      const wiwName = String(row.wiwName||'').trim();  // 구시군명 (개표 API·지도 피처와 동일 키)
       const party   = String(row.jdName||'무소속').trim();
       const candName= String(row.name||'').trim();
 
@@ -1529,18 +1542,19 @@ async function fetchUncontestedSgg(sgId){
       if(!D_SGG[sgId])D_SGG[sgId]={};
       if(!D_SGG[sgId][sidoNm])D_SGG[sgId][sidoNm]={};
 
-      // sggName에서 선거구명 추출 ("예천군가선거구" → "예천군")
-      // 가/나 선거구 접미사 제거
+      // ★ wiwName(구시군명)을 우선 키로 사용 — fetchSggBySido·지도 피처와 동일 기준
+      // wiwName이 없을 때만 sggName 가/나 접미사 제거 후 fallback
       const cleanSgg = sggName.replace(/[가나다라마바사]선거구$/, '').trim();
+      const key = wiwName || cleanSgg;
 
-      D_SGG[sgId][sidoNm][cleanSgg] = party;
+      D_SGG[sgId][sidoNm][key] = party;
 
       // sggDetail 업데이트
       if(!ST.sggDetail)ST.sggDetail={};
       if(!ST.sggDetail[sgId])ST.sggDetail[sgId]={};
       if(!ST.sggDetail[sgId][sidoNm])ST.sggDetail[sgId][sidoNm]={};
 
-      ST.sggDetail[sgId][sidoNm][cleanSgg] = {
+      ST.sggDetail[sgId][sidoNm][key] = {
         winner: party,
         cands: [{name: candName, party, votes: 0, pct: 0}],
         rate: 100,
