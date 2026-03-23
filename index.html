@@ -186,6 +186,11 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
     <svg id="map-svg"></svg>
     <div id="map-toolbar">
       
+      <div class="tool-row" style="background:rgba(4,6,14,.92); border:1px solid var(--border2); border-radius:5px; overflow:hidden;">
+        <button id="btn-level-sido" class="map-tbtn on" style="border:none; border-radius:0; border-right:1px solid var(--border2);" onclick="setLevel('sido')">광역</button>
+        <button id="btn-level-sgg" class="map-tbtn" style="border:none; border-radius:0;" onclick="setLevel('sgg')">기초</button>
+      </div>
+
       <div class="tool-row map-tbtn" id="stroke-row" style="cursor:default;">
         <span style="font-size:11px; font-weight:700;">경계 굵기</span>
         <input type="range" id="stroke-width" min="0.1" max="2.0" step="0.1" value="0.5" oninput="changeStrokeWidth(this.value)">
@@ -254,7 +259,7 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
       </div></div>
     <div class="m-btns">
       <button class="btn-ok" onclick="saveSettings()">저장 및 적용</button>
-      <button class="btn-sm" onclick="fetchSGISGeo(curEl().year)">🗺 현재 연도 지도 강제 갱신</button>
+      <button class="btn-sm" onclick="forceFetchNationwideSido(curEl().year)">🗺 현재 연도 지도 강제 갱신</button>
       <button class="btn-cancel" onclick="closeSettings()">취소</button>
     </div>
     <div id="cache-st"></div>
@@ -263,7 +268,7 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
 
 <script>
 // ════════════════════════════════════════════
-//  IndexedDB 캐싱 (v10: 스위칭 로직 완전 정착)
+//  IndexedDB 캐싱 (v14: 특례시 통합 그룹화 강제 적용)
 // ════════════════════════════════════════════
 const DB_NAME = 'ElectionMapDB';
 const STORE_NAME = 'geoStore';
@@ -286,7 +291,7 @@ async function saveGeoToCache(year, data) {
   try {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(data, `geo_cache_v11_${year}`);
+    tx.objectStore(STORE_NAME).put(data, `geo_cache_v14_${year}`);
     return new Promise(res => { tx.oncomplete = () => res(true); tx.onerror = () => res(false); });
   } catch (e) { return false; }
 }
@@ -295,10 +300,23 @@ async function loadGeoFromCache(year) {
   try {
     const db = await initDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).get(`geo_cache_v11_${year}`);
+    const req = tx.objectStore(STORE_NAME).get(`geo_cache_v14_${year}`);
     return new Promise(res => { req.onsuccess = () => res(req.result); req.onerror = () => res(null); });
   } catch (e) { return null; }
 }
+
+// ════════════════════════════════════════════
+//  명칭 알리아스 및 특례시/대도시 목록 (단일 시군구로 통합)
+// ════════════════════════════════════════════
+const SGG_ALIAS = {
+    '미추홀구': '남구',
+    '미추홀': '남구',
+    '당진시': '당진군',
+    '여주시': '여주군'
+};
+
+// 🌟 분리된 행정구를 가진 기초자치단체 목록 (하나의 시장을 뽑음)
+const BASE_CITIES = ['수원시', '성남시', '안양시', '안산시', '고양시', '용인시', '청주시', '천안시', '전주시', '포항시', '창원시'];
 
 // ════════════════════════════════════════════
 //  PARTY, ELECTIONS, STATE
@@ -306,24 +324,7 @@ async function loadGeoFromCache(year) {
 const PDB={'국민의힘':{color:'#E61E2B',short:'국힘'},'자유한국당':{color:'#E61E2B',short:'자한'},'새누리당':{color:'#E61E2B',short:'새누'},'한나라당':{color:'#E61E2B',short:'한나'},'더불어민주당':{color:'#1259C3',short:'민주'},'새정치민주연합':{color:'#1259C3',short:'새정'},'민주당':{color:'#1259C3',short:'민주'},'국민참여당':{color:'#1259C3',short:'참여'},'민주노동당':{color:'#F97316',short:'민노'},'조국혁신당':{color:'#00A68C',short:'혁신'},'바른미래당':{color:'#F97316',short:'바른'},'개혁신당':{color:'#F4802A',short:'개혁'},'정의당':{color:'#F4802A',short:'정의'},'자유선진당':{color:'#8B6FD4',short:'자선'},'무소속':{color:'#6B7280',short:'무소'}};
 const pc=p=>PDB[p]?.color??'#555';
 const ps=p=>PDB[p]?.short??(p?.slice(0,3)??'?');
-
-// ── 일반구(행정구) → 상위 시 매핑 ──────────────────────────────
-// 기초단체장 선거는 "안산시장" 1명을 뽑으므로 NEC API는 wiwName="안산시"로만 반환.
-// GADM 등 구-단위 지도 피처와 매칭하기 위해 정적 테이블 사용.
-// 광역시 자치구(중구·서구 등)는 NEC API와 직접 매칭되므로 여기 포함 안 함.
-const DISTRICT_TO_CITY = {
-  '장안구':'수원시','권선구':'수원시','팔달구':'수원시','영통구':'수원시',
-  '수정구':'성남시','중원구':'성남시','분당구':'성남시',
-  '만안구':'안양시','동안구':'안양시',
-  '상록구':'안산시','단원구':'안산시',
-  '덕양구':'고양시','일산동구':'고양시','일산서구':'고양시',
-  '처인구':'용인시','기흥구':'용인시','수지구':'용인시',
-  '상당구':'청주시','서원구':'청주시','흥덕구':'청주시','청원구':'청주시',
-  '동남구':'천안시','서북구':'천안시',
-  '완산구':'전주시','덕진구':'전주시',
-  '의창구':'창원시','성산구':'창원시','마산합포구':'창원시','마산회원구':'창원시','진해구':'창원시',
-};
-const fmt=n=>n?Number(n).toLocaleString('ko-KR'):'-';
+const fmt=n=>(typeof n==='number'||(!isNaN(n)&&n!==''))?Number(n).toLocaleString('ko-KR'):n; 
 
 const ELECTIONS=[{sgId:'20260603',round:'제9회',year:2026,date:'2026.06.03',status:'upcoming'},{sgId:'20220601',round:'제8회',year:2022,date:'2022.06.01',status:'done'},{sgId:'20180613',round:'제7회',year:2018,date:'2018.06.13',status:'done'},{sgId:'20140604',round:'제6회',year:2014,date:'2014.06.04',status:'done'},{sgId:'20100602',round:'제5회',year:2010,date:'2010.06.02',status:'done'}];
 
@@ -352,7 +353,19 @@ const getGeoName=p=>p.SIDO_NM||p.SIGUNGU_NM||p.NM_SIGUNGU||p.NM_SIDO||p.name||p.
 const getGeoCode=p=>String(p.SIGUNGU_CD||p.SIDO_CD||p.code||p.adm_cd||p.ID_1||'');
 
 const extractSidoName=p=>p.sidoName||normName(p.SIDO_NM||p.NAME_1||(p.adm_nm&&p.adm_cd&&String(p.adm_cd).length<=2?p.adm_nm:'')||'');
-const extractSggName=p=>p.SIGUNGU_NM||p.NAME_2||(p.adm_nm&&p.adm_cd&&String(p.adm_cd).length>=5?String(p.adm_nm).split(' ').pop():'')||'';
+
+// 🌟 SGIS의 긴 구 이름("안산시 상록구")을 상위 도시("안산시")로 강제 통합
+function extractSggNameFromSgis(adm_nm, sidoNm) {
+    let s = String(adm_nm || '').trim();
+    const p = String(sidoNm || '').trim();
+    if (p && s.startsWith(p)) {
+        s = s.replace(p, '').trim();
+    }
+    for (const city of BASE_CITIES) {
+        if (s.startsWith(city)) return city; // "안산시" 반환
+    }
+    return s || adm_nm;
+}
 
 const shortSido=n=>{
   if(n==='충청북도')return '충북';if(n==='충청남도')return '충남';
@@ -370,38 +383,41 @@ function getSidoNameFromProps(p){
   return SIDO_ALL.find(s=>s===raw||s.includes(raw.replace(/시$|도$/,''))) || raw;
 }
 
-function getSggParty(sidoName,sggRawName,sgId,parentCityHint){
+function getSggParty(sidoName,sggRawName,sgId){
   if(!sggRawName)return null;
-  const tbl=D_SGG[sgId]?.[sidoName]||null;
-  if(!tbl)return null;
 
-  // 0단계: _parentCity 힌트가 있으면 바로 조회 (안산시 상록구 → "안산시" 직접 키 조회)
-  if(parentCityHint && tbl[parentCityHint]) return tbl[parentCityHint];
+  const stripAll = n => String(n).replace(/\s+/g, '').replace(/시$|구$|군$|읍$|면$/,'');
+  const nm0 = String(sggRawName).trim().replace(/\s+/g, '');
+  const nm1 = SGG_ALIAS[nm0] || nm0; 
 
-  // 이름 정규화: 공백 제거 + 일반구 상위 시 접두 제거
-  const normalize = n => {
-    let s = String(n).replace(/\s+/g, '');
-    s = s.replace(/^[가-힣]+시(?=[가-힣]+[구군])/, '');
-    if(sidoName) s = s.replace(sidoName.replace(/\s+/g,''), '');
-    return s;
-  };
-  const stripSuffix = n => n.replace(/[시구군읍면동리]$/, '');
-
-  const nm0 = String(sggRawName).replace(/\s+/g, '');
-  const nm0n = normalize(nm0);
-
-  for(const k of Object.keys(tbl)){
-    const kn = normalize(k);
-    if(kn === nm0 || kn === nm0n || nm0 === normalize(k)) return tbl[k];
+  function matchInTbl(tbl) {
+    if(!tbl) return null;
+    for(const k of Object.keys(tbl)){
+      const cleanK = k.replace(/\s+/g, '');
+      if(cleanK === nm0 || cleanK === nm1) return tbl[k];
+    }
+    const baseName = stripAll(nm1);
+    const baseName0 = stripAll(nm0);
+    for(const k of Object.keys(tbl)){
+      const cleanK = k.replace(/\s+/g, '');
+      if(stripAll(cleanK) === baseName || stripAll(cleanK) === baseName0) return tbl[k];
+    }
+    for(const k of Object.keys(tbl)){
+      const cleanK = k.replace(/\s+/g, '');
+      if(nm0.includes(cleanK) || cleanK.includes(nm0)) return tbl[k];
+      if(nm1.includes(cleanK) || cleanK.includes(nm1)) return tbl[k];
+    }
+    return null;
   }
-  for(const k of Object.keys(tbl)){
-    const kn = normalize(k);
-    if(stripSuffix(kn) === stripSuffix(nm0n)) return tbl[k];
-  }
-  for(const k of Object.keys(tbl)){
-    const kn = normalize(k);
-    if(kn.length >= 2 && nm0n.length >= 2){
-      if(nm0n.includes(kn) || kn.includes(nm0n)) return tbl[k];
+
+  let party = matchInTbl(D_SGG[sgId]?.[sidoName]);
+  if (party) return party;
+
+  if (D_SGG[sgId]) {
+    for (const otherSido of Object.keys(D_SGG[sgId])) {
+      if (otherSido === sidoName) continue;
+      party = matchInTbl(D_SGG[sgId][otherSido]);
+      if (party) return party;
     }
   }
   return null;
@@ -426,11 +442,11 @@ function preprocessSggColors(sgId){
       sidoName=SIGUNGU_FILE_CODE[sp]||codeToSido[sp]||null;
     }
     
-    let rawNm = String(p.name || p.adm_nm || p.SIGUNGU_NM || '').trim() || extractSggName(p);
+    let rawNm = String(p.sggNm || p.name || p.adm_nm || p.SIGUNGU_NM || '').trim() || extractSggNameFromSgis(p.adm_nm, sidoName);
     let party=null;
     const tbl=D_SGG[sgId]?.[sidoName]||null;
     if(tbl&&rawNm){
-      party=getSggParty(sidoName, rawNm, sgId, p._parentCity||null);
+      party=getSggParty(sidoName, rawNm, sgId);
     }
     p._sidoName=sidoName;
     p._sggParty=party;
@@ -439,30 +455,63 @@ function preprocessSggColors(sgId){
 }
 
 let ST={
-  sidoGeo:null,sigunguGeo:null,geoLoaded:false,
-  currentSgId:'20260603',  
-  data:{}, sggDetail:{},  
-  dataSource:'mock', showLabels:true, selectedSido:null,
-  bgOpacity:0.3,
-  sidoStrokeWidth: 0.5, // 굵기를 0.8 -> 0.5로 디폴트 하향 (세련되게)
-  mode:'mock',apiKey:'',proxyUrl:'',sgisKey:'',sgisSecret:'',pollSec:30,isLive:false,pollTimer:null,
+  sidoGeo: null,
+  sigunguGeo: null,
+  sggGeoCache: {}, 
+  geoLoaded: false,
+  
+  currentSgId: '20260603',  
+  data: {},
+  D_SGG: {}, 
+  sggDetail: {},
+  
+  dataSource: 'mock', showLabels: true, 
+  mapLevel: 'sido', 
+  selectedSidoCd: null, selectedSidoNm: null,
+  bgOpacity: 0.3,
+  sidoStrokeWidth: 0.5, 
+  
+  sgisToken: null,
+  mode: 'mock', apiKey: '', proxyUrl: '', sgisKey: '', sgisSecret: '', pollSec: 30, isLive: false, pollTimer: null,
 };
 const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
 
 // ════════════════════════════════════════════
-//  GEO FETCHING
+//  COORDINATE CONVERSION
 // ════════════════════════════════════════════
-const GEO_SRCS=[
-  {sido:'./geo/sido.geojson',sigungu:'./geo/sigungu.geojson'},
-  {sido:'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-provinces-geo.json',sigungu:'https://cdn.jsdelivr.net/gh/southkorea/southkorea-maps@master/gadm/json/skorea-municipalities-geo.json'},
-];
-async function tryFetch(url){try{const r=await fetch(url);if(r.ok)return await r.json();}catch{}return null;}
-
-function utmk2wgs(x,y){const a=6378137,e2=0.00669438002290,dx=1000000,dy=2000000,lo=127.5*Math.PI/180,po=38*Math.PI/180;const px=x-dx,py=y-dy;const e4=e2*e2,e6=e4*e2;const M0=a*((1-e2/4-3*e4/64-5*e6/256)*po-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*po)+(15*e4/256+45*e6/1024)*Math.sin(4*po));const M=M0+py;const mu=M/(a*(1-e2/4-3*e4/64-5*e6/256));const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));const p=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1**2/16)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu);const sp=Math.sin(p),cp=Math.cos(p),tp=sp/cp;const N=a/Math.sqrt(1-e2*sp*sp),T=tp*tp,C=e2/(1-e2)*cp*cp;const R=a*(1-e2)/(1-e2*sp*sp)**1.5,D=px/N;const lat=p-(N*tp/R)*(D*D/2-(5+3*T+10*C-4*C*C)*D**4/24+(61+90*T+298*C+45*T*T)*D**6/720);const lon=lo+(D-(1+2*T+C)*D**3/6+(5-2*C+28*T)*D**5/120)/cp;return[Math.round(lon*180/Math.PI*1e5)/1e5,Math.round(lat*180/Math.PI*1e5)/1e5];}
-function convC(c){if(!c)return c;if(typeof c[0]==='number'){const r=utmk2wgs(c[0],c[1]);return r;}return c.map(convC);}
+function utmk2wgs(x,y){
+  const a=6378137,e2=0.00669438002290,dx=1000000,dy=2000000,lo=127.5*Math.PI/180,po=38*Math.PI/180;
+  const px=x-dx,py=y-dy;const e4=e2*e2,e6=e4*e2;
+  const M0=a*((1-e2/4-3*e4/64-5*e6/256)*po-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*po)+(15*e4/256+45*e6/1024)*Math.sin(4*po));
+  const M=M0+py;const mu=M/(a*(1-e2/4-3*e4/64-5*e6/256));const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  const p=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1**2/16)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu);
+  const sp=Math.sin(p),cp=Math.cos(p),tp=sp/cp;const N=a/Math.sqrt(1-e2*sp*sp),T=tp*tp,C=e2/(1-e2)*cp*cp;
+  const R=a*(1-e2)/(1-e2*sp*sp)**1.5,D=px/N;
+  const lat=p-(N*tp/R)*(D*D/2-(5+3*T+10*C-4*C*C)*D**4/24+(61+90*T+298*C+45*T*T)*D**6/720);
+  const lon=lo+(D-(1+2*T+C)*D**3/6+(5-2*C+28*T)*D**5/120)/cp;
+  return[Math.round(lon*180/Math.PI*1e6)/1e6, Math.round(lat*180/Math.PI*1e6)/1e6];
+}
+function convC(c){if(!c)return c;if(typeof c[0]==='number')return utmk2wgs(c[0],c[1]);return c.map(convC);}
 function needConv(geo){try{let c=geo.features[0]?.geometry?.coordinates;while(Array.isArray(c[0]))c=c[0];return Math.abs(c[0])>500;}catch{return false;}}
-function convGeo(geo){if(!needConv(geo))return geo;return{...geo,features:geo.features.map(f=>({...f,geometry:{...f.geometry,coordinates:convC(f.geometry.coordinates)}}))};}
+function convGeo(geo){
+  try{let c=geo.features[0]?.geometry?.coordinates; while(Array.isArray(c[0]))c=c[0]; if(Math.abs(c[0])<500) return geo;}catch{}
+  return{...geo,features:geo.features.map(f=>({...f,geometry:{...f.geometry,coordinates:convC(f.geometry.coordinates)}}))};
+}
+
+// ════════════════════════════════════════════
+//  SGIS API FETCHING
+// ════════════════════════════════════════════
+async function getSgisToken() {
+    if (ST.sgisToken) return ST.sgisToken;
+    const proxy = ST.proxyUrl.replace(/\/$/, '');
+    const authUrl = `https://sgisapi.mods.go.kr/OpenAPI3/auth/authentication.json?consumer_key=${encodeURIComponent(ST.sgisKey)}&consumer_secret=${encodeURIComponent(ST.sgisSecret)}`;
+    const r = await fetch(`${proxy}?url=${encodeURIComponent(authUrl)}`);
+    const d = await r.json();
+    if (d.errCd !== 0) throw new Error(d.errMsg);
+    ST.sgisToken = d.result.accessToken;
+    return ST.sgisToken;
+}
 
 function normGeo(geo){
   if(!geo||!geo.features)return geo;
@@ -470,7 +519,6 @@ function normGeo(geo){
   return{...geo,features:geo.features.map(f=>{
     const p=f.properties;
     let nm=''; let code=getGeoCode(p); let _sido=p.sido||''; let _sidoName=null;
-    let _parentCity=null; // "안산시 상록구" → "안산시" (구를 포함하는 상위 시/군)
 
     const admCd=String(p.adm_cd||'').trim();
     const admNm=String(p.adm_nm||'').trim();
@@ -478,19 +526,7 @@ function normGeo(geo){
     if(admCd && admNm){
       code = admCd; nm = admNm;
       if(admCd.length<=2){ nm = normName(admNm) || admNm; _sido = admCd; }
-      else if(admCd.length>=5){
-        _sido = admCd.slice(0,2);
-        _sidoName = SIGUNGU_FILE_CODE[_sido]||_codeToSido[_sido]||null;
-        // adm_nm = "안산시 상록구" 처럼 '시/군 + 구/읍/면' 형태이면 상위 시/군 추출
-        const admParts = admNm.trim().split(/\s+/);
-        if(admParts.length >= 2){
-          const parent = admParts[admParts.length - 2];
-          const child  = admParts[admParts.length - 1];
-          if(/[구읍면]$/.test(child) && /[시군]$/.test(parent)){
-            _parentCity = parent; // "안산시", "수원시", "성남시" 등
-          }
-        }
-      }
+      else if(admCd.length>=5){ _sido = admCd.slice(0,2); _sidoName = SIGUNGU_FILE_CODE[_sido]||_codeToSido[_sido]||null; }
     }else{
       if (p.SIDO_NM) nm = extractSidoName(p);
       else if (p.SIGUNGU_NM) nm = extractSggName(p);
@@ -504,12 +540,7 @@ function normGeo(geo){
         _sido=SIDO_CODE[_sidoName]||'';
       }
     }
-    // GADM 등 non-SGIS 소스: adm_nm 없어도 DISTRICT_TO_CITY로 _parentCity 보완
-    if(!_parentCity){
-      const leafNm = nm.split(/\s+/).pop();
-      if(leafNm && DISTRICT_TO_CITY[leafNm]) _parentCity = DISTRICT_TO_CITY[leafNm];
-    }
-    return{...f,properties:{...p,name:nm,code,sido:_sido,sidoName:_sidoName,_parentCity}};
+    return{...f,properties:{...p,name:nm,code,sido:_sido,sidoName:_sidoName}};
   })};
 }
 
@@ -605,6 +636,11 @@ async function fetchSGISGeo(targetYear) {
     const sidoGeo = normGeo(convGeo({ type: 'FeatureCollection', features: finalSidoF }));
     const sigunguGeo = normGeo(convGeo({ type: 'FeatureCollection', features: sggAll }));
     
+    // 🌟 안산시 상록구/단원구 등 통합을 위해 sggNm 일괄 세팅
+    sigunguGeo.features.forEach(f => {
+       f.properties.sggNm = extractSggNameFromSgis(f.properties.adm_nm, f.properties.sidoName || SIDO_CODE_MAP[f.properties.sido]);
+    });
+
     await saveGeoToCache(targetYear, { sido: sidoGeo, sigungu: sigunguGeo, ts: Date.now(), actualYear });
     
     ST.sidoGeo = sidoGeo; ST.sigunguGeo = sigunguGeo; ST.geoLoaded = true;
@@ -644,6 +680,7 @@ async function loadGeo(year) {
     const [sd,sg]=await Promise.all([tryFetch(src.sido),tryFetch(src.sigungu)]);
     if(sd&&sg){
       ST.sidoGeo=normGeo(convGeo(sd));ST.sigunguGeo=normGeo(convGeo(sg));
+      ST.sigunguGeo.features.forEach(f => { f.properties.sggNm = extractSggNameFromSgis(f.properties.name, f.properties.sidoName); });
       ST.geoLoaded=true;
       rebuildMap();
       loading.style.display = 'none';
@@ -654,7 +691,7 @@ async function loadGeo(year) {
 }
 
 // ════════════════════════════════════════════
-//  메인 지도 렌더 (완벽한 스위칭 로직 적용)
+//  MAIN D3 RENDERING 
 // ════════════════════════════════════════════
 let _proj=null,_path=null,_mapInitialized=false;
 
@@ -682,7 +719,7 @@ function rebuildMap() {
 }
 
 function initMapLayers(){
-  if(_mapInitialized)return;
+  if(_mapInitialized || !ST.sidoGeo) return;
   const svgEl=document.getElementById('map-svg');
   const W=svgEl.clientWidth||700,H=svgEl.clientHeight||600;
   const svg=d3.select('#map-svg').attr('viewBox',`0 0 ${W} ${H}`);
@@ -692,15 +729,13 @@ function initMapLayers(){
     const k=ev.transform.k;
     svg.select('#map-g').attr('transform',ev.transform);
     
-    // Zooming stroke-width updates
-    svg.select('#sido-layer').attr('stroke-width', ST.sidoStrokeWidth / k); // 슬라이더 설정값 적용
-    svg.select('#sgg-layer').attr('stroke-width', 0.4 / k); // 시군구는 고정된 얇은 선 유지
+    svg.select('#sido-layer').attr('stroke-width', ST.sidoStrokeWidth / k); 
+    svg.select('#sgg-layer').attr('stroke-width', 0.4 / k); 
     
     svg.selectAll('.sido-lbl,.sgg-lbl').attr('transform',function(d) {
       try {
-        const ct=_path.centroid(d);
-        let x = ct[0], y = ct[1];
-        if (d3.select(this).classed('sido-lbl') && getSidoNameFromProps(d.properties) === '경기도') {
+        let x = d.cx, y = d.cy;
+        if (d3.select(this).classed('sido-lbl') && d.sidoNm === '경기도') {
             x += 15; y += 25; 
         }
         return `translate(${x},${y}) scale(${1/k})`;
@@ -713,7 +748,6 @@ function initMapLayers(){
 
   const g=svg.append('g').attr('id','map-g');
   
-  // 전국용 SIDO 레이어 / 확대용 SGG 레이어
   g.append('g').attr('id','sido-layer').attr('stroke-linejoin', 'round').attr('stroke-width', ST.sidoStrokeWidth).attr('stroke', 'rgba(0,0,0,0.8)');
   g.append('g').attr('id','sgg-layer').attr('stroke-linejoin', 'round').attr('stroke-width', 0.4);
   g.append('g').attr('id','lbl-layer');
@@ -721,46 +755,36 @@ function initMapLayers(){
   _proj=d3.geoMercator().fitExtent([[18,18],[W-18,H-18]],ST.sidoGeo);
   _path=d3.geoPath().projection(_proj);
 
-  // 1. 전국 단위 고해상도 시도 (SIDO) 렌더링
   d3.select('#sido-layer').selectAll('.sido-p')
     .data(ST.sidoGeo.features).join('path')
     .attr('class','sido-p')
     .attr('d',_path)
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
-      const nm=getSidoNameFromProps(d.properties);
-      if(!ST.selectedSido)d3.select(this).attr('opacity',.72);
-      showDetail(nm);showMainTooltip(ev,nm,svgEl.clientWidth);
+      const nm = d.properties.sidoNm;
+      if(!ST.selectedSidoCd) d3.select(this).attr('opacity',.72);
+      showDetail(nm); showMainTooltip(ev,nm,svgEl.clientWidth);
     })
     .on('mousemove',ev=>moveTooltip(ev,svgEl.clientWidth))
     .on('mouseout',function(ev,d){
-      const nm=getSidoNameFromProps(d.properties);
-      if(!ST.selectedSido) d3.select(this).attr('opacity', 1);
-      if(!ST.selectedSido||ST.selectedSido!==nm)clearDetail();
-      hideTooltip();
+      const nm = d.properties.sidoNm;
+      if(!ST.selectedSidoCd) d3.select(this).attr('opacity', 1);
+      clearDetail(); hideTooltip();
     })
-    .on('click',(ev,d)=>{
-      const nm=getSidoNameFromProps(d.properties);
-      if(ST.selectedSido===nm) drillUp(); else drillDown(nm);
-    });
+    .on('click',(ev,d)=> drillDown(d.properties.sidoCd, d.properties.sidoNm) );
 
-  // 2. 전국의 모든 고해상도 시군구 (SGG) 렌더링
   d3.select('#sgg-layer').selectAll('.sgg-path')
     .data(ST.sigunguGeo.features).join('path')
     .attr('class','sgg-path')
     .attr('d',_path)
     .style('cursor','pointer')
     .on('mouseover',function(ev,d){
-      if(!ST.selectedSido) return;
+      if(!ST.selectedSidoCd) return;
       const sidoName=d.properties._sidoName;
-      if (sidoName === ST.selectedSido) {
-        d3.select(this).attr('opacity',0.75); 
-        const rawNm=String(d.properties.name||d.properties.adm_nm||d.properties.SIGUNGU_NM||'').trim()||extractSggName(d.properties);
-        const party=d.properties._sggParty||getSggParty(sidoName,rawNm,ST.currentSgId,d.properties._parentCity||null)||null;
-        const dispNm = d.properties._parentCity
-          ? `${d.properties._parentCity.replace(/시$|군$/,'')} ${rawNm.split(/\s+/).pop()}`
-          : rawNm;
-        showSggTooltip(ev,dispNm,party,sidoName);
+      if (sidoName === ST.selectedSidoNm) {
+        d3.selectAll('.sgg-path').filter(f => f.properties._sidoName === sidoName && f.properties.sggNm === d.properties.sggNm).attr('opacity',0.75); 
+        const party=d.properties._sggParty||getSggParty(sidoName, d.properties.sggNm, ST.currentSgId)||null;
+        showSggTooltip(ev,d.properties.sggNm,party,sidoName);
       } else {
         d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity', ST.bgOpacity + 0.2);
         showMainTooltip(ev,sidoName,svgEl.clientWidth);
@@ -768,10 +792,10 @@ function initMapLayers(){
     })
     .on('mousemove',ev=>moveTooltip(ev,svgEl.clientWidth))
     .on('mouseout',function(ev,d){
-      if(!ST.selectedSido) return;
+      if(!ST.selectedSidoCd) return;
       const sidoName=d.properties._sidoName;
-      if (sidoName === ST.selectedSido) {
-        d3.select(this).attr('opacity', 1);
+      if (sidoName === ST.selectedSidoNm) {
+        d3.selectAll('.sgg-path').filter(f => f.properties._sidoName === sidoName && f.properties.sggNm === d.properties.sggNm).attr('opacity', 1);
       } else {
         d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity', ST.bgOpacity);
       }
@@ -779,45 +803,44 @@ function initMapLayers(){
     })
     .on('click',(ev,d)=>{
       const sidoName=d.properties._sidoName;
-      if(ST.selectedSido===sidoName) drillUp(); else drillDown(sidoName);
+      if(ST.selectedSidoNm===sidoName) drillUp(); else drillDown(d.properties.sidoCd, sidoName);
     });
 
-  // 3. 레이블 (Sido)
+  const sidoLabels = ST.sidoGeo.features.map(f => {
+      const ct = _path.centroid(f);
+      return { sidoNm: getSidoNameFromProps(f.properties), cx: ct[0], cy: ct[1] };
+  });
+
   d3.select('#lbl-layer').selectAll('.sido-lbl')
-    .data(ST.sidoGeo.features).join('text')
+    .data(sidoLabels).join('text')
     .attr('class','sido-lbl')
-    .attr('transform',function(d){
-        const ct=_path.centroid(d);
-        if (getSidoNameFromProps(d.properties)==='경기도') { ct[0]+=15; ct[1]+=25; }
-        return `translate(${ct[0]},${ct[1]})`;
-    })
+    .attr('transform', d => { let x=d.cx, y=d.cy; if(d.sidoNm==='경기도'){x+=15;y+=25;} return `translate(${x},${y})`; })
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family',"'Noto Sans KR',sans-serif")
-    .attr('font-size', '11') // 경기도 포함 모든 폰트 사이즈 통일
+    .attr('font-size', '11') 
     .attr('font-weight','700').attr('fill','rgba(255,255,255,.88)').attr('pointer-events','none')
-    .text(d=>shortSido(getSidoNameFromProps(d.properties)));
+    .text(d=>shortSido(d.sidoNm));
 
-  // 4. 레이블 (SGG)
+  // 🌟 통합된 도시 라벨 (가장 면적이 큰 폴리곤 기준 정중앙 1개만)
+  const sggLabels = [];
+  d3.group(ST.sigunguGeo.features, d => d.properties._sidoName + '|' + d.properties.sggNm)
+    .forEach(feats => {
+        let maxA = -1, best = feats[0];
+        feats.forEach(f => { try { const a = _path.area(f); if(a > maxA){ maxA=a; best=f; } } catch(e){} });
+        const ct = _path.centroid(best);
+        sggLabels.push({ sidoNm: best.properties._sidoName, sggNm: best.properties.sggNm, cx: ct[0], cy: ct[1] });
+    });
+
   d3.select('#lbl-layer').selectAll('.sgg-lbl')
-    .data(ST.sigunguGeo.features).join('text')
+    .data(sggLabels).join('text')
     .attr('class','sgg-lbl')
-    .attr('transform',d=>{try{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]})`;}catch{return 'translate(0,0)';}})
+    .attr('transform', d => `translate(${d.cx},${d.cy})`)
     .attr('text-anchor','middle').attr('dominant-baseline','middle')
     .attr('font-family',"'Noto Sans KR',sans-serif")
     .attr('font-size', '8')
     .attr('font-weight','600').attr('fill','rgba(255,255,255,.9)').attr('pointer-events','none')
     .attr('opacity', 0)
-    .text(d=>{
-        const p = d.properties;
-        // 상위 시/군이 있는 구 피처면 (예: 안산시 상록구, 수원시 장안구)
-        // → "안산", "수원" 처럼 시 이름으로 표시
-        if(p._parentCity){
-          return p._parentCity.replace(/시$|군$/,'').slice(0,4);
-        }
-        let raw = String(p.name || p.adm_nm || p.SIGUNGU_NM || '').trim();
-        let nm = raw.split(/\s+/).pop() || extractSggName(p) || '';
-        return nm.replace(/시$|구$|군$/,'').slice(0,4);
-    });
+    .text(d => d.sggNm.replace(/시$|구$|군$/,'').slice(0,4));
 
   _mapInitialized=true;
   updateMapColors();
@@ -826,61 +849,111 @@ function initMapLayers(){
 function updateMapColors(){
   if(!_mapInitialized)return;
 
-  if (!ST.selectedSido) {
-      // 🟢 1. 전국 뷰 모드
-      d3.select('#sido-layer').style('display', 'block');
-      d3.select('#sgg-layer').style('display', 'none'); 
+  if (!ST.selectedSidoCd) {
+      if (ST.mapLevel === 'sido') {
+          d3.select('#sido-layer').style('display', 'block');
+          d3.select('#sgg-layer').style('display', 'none');
 
-      d3.selectAll('.sido-p')
-        .attr('fill', d => _sidoFill(d.properties))
-        .attr('opacity', 1);
+          d3.selectAll('.sido-p')
+            .attr('fill', d => getPartyColorForSido(d.properties.sidoNm))
+            .attr('opacity', 1);
 
-      d3.selectAll('.sido-lbl').style('display', ST.showLabels ? 'block' : 'none');
-      d3.selectAll('.sgg-lbl').style('display', 'none');
+          d3.selectAll('.sido-lbl').style('display', ST.showLabels ? 'block' : 'none');
+          d3.selectAll('.sgg-lbl').style('display', 'none');
+      } else {
+          d3.select('#sido-layer').style('display', 'block');
+          d3.select('#sgg-layer').style('display', 'none');
+          d3.selectAll('.sido-p')
+            .attr('fill', d => getPartyColorForSido(d.properties.sidoNm))
+            .attr('opacity', 1);
+          d3.selectAll('.sido-lbl').style('display', ST.showLabels ? 'block' : 'none');
+      }
   } else {
-      // 🟢 2. 드릴다운 뷰 모드 
-      d3.select('#sido-layer').style('display', 'none'); 
+      d3.select('#sido-layer').style('display', 'block'); 
       d3.select('#sgg-layer').style('display', 'block'); 
 
-      d3.selectAll('.sgg-path')
-        .style('display', 'block') // 모든 시군구를 다 보여줌
-        .attr('fill', d => {
-           const sidoName = d.properties._sidoName;
-           if (sidoName === ST.selectedSido) {
-              // 선택된 시도의 시군구 내부 색상
-              if (d.properties._sggColor && d.properties._sggColor !== '#1a2030') return d.properties._sggColor;
-              const rawNm = String(d.properties.name || d.properties.adm_nm || d.properties.SIGUNGU_NM || '').trim() || extractSggName(d.properties);
-              const party = getSggParty(sidoName, rawNm, ST.currentSgId, d.properties._parentCity||null);
-              if (party) return pc(party);
-              const sido = ST.data[sidoName];
-              return sido ? pc(sido.winner) + '44' : '#1a2030';
-           } else {
-              // 나머지 배경 시도들은 시도 단위 색상으로 통일
-              const sido = ST.data[sidoName];
-              return sido ? pc(sido.winner) : '#111a30';
-           }
-        })
-        .attr('stroke', d => {
-           const sidoName = d.properties._sidoName;
-           if (sidoName === ST.selectedSido) {
-              return 'rgba(0,0,0,0.5)'; // 선택된 지역 안쪽 SGG 경계선 선명하게
-           } else {
-              // 다른 지역들은 내부 경계선의 색상을 fill과 맞춰 안보이게 만듦
-              const sido = ST.data[sidoName];
-              return sido ? pc(sido.winner) : '#111a30';
-           }
-        })
+      d3.selectAll('.sido-p')
         .attr('opacity', d => {
-           return d.properties._sidoName === ST.selectedSido ? 1 : ST.bgOpacity;
-        });
+            if (d.properties.sidoCd === ST.selectedSidoCd) return 0; 
+            return ST.bgOpacity; 
+        })
+        .attr('fill', d => getPartyColorForSido(d.properties.sidoNm));
+
+      d3.selectAll('.sgg-path')
+        .attr('fill', d => {
+           const partyColor = getPartyColorForSgg(d.properties._sidoName, d.properties.sggNm);
+           if (partyColor) return partyColor;
+           
+           const sidoWinnerColor = getPartyColorForSido(d.properties._sidoName);
+           return sidoWinnerColor !== '#111a30' ? sidoWinnerColor + '44' : '#1a2030';
+        })
+        .attr('stroke', ST.mapLevel === 'sgg' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.15)')
+        .attr('opacity', 1);
 
       d3.selectAll('.sido-lbl').style('display', 'none');
-      d3.selectAll('.sgg-lbl')
-        .style('display', d => (ST.showLabels && d.properties._sidoName === ST.selectedSido) ? 'block' : 'none')
-        .attr('opacity', d => d.properties._sidoName === ST.selectedSido ? 1 : 0);
+      d3.selectAll('.sgg-lbl').style('display', ST.showLabels ? 'block' : 'none').attr('opacity', 1);
   }
   
   renderLegend();
+}
+
+function setLevel(lvl) {
+    ST.mapLevel = lvl;
+    document.getElementById('btn-level-sido').classList.toggle('on', lvl === 'sido');
+    document.getElementById('btn-level-sgg').classList.toggle('on', lvl === 'sgg');
+    
+    renderSummaryBar();
+    updateMapColors();
+}
+
+async function drillDown(sidoCd, sidoNm){
+  if(!_mapInitialized)return;
+  ST.selectedSidoCd = sidoCd;
+  ST.selectedSidoNm = sidoNm;
+
+  document.getElementById('drill-nav').style.display='block';
+  document.getElementById('opacity-row').style.display='flex';
+  document.getElementById('stroke-row').style.display='none'; 
+
+  const sggGeo = await fetchSggGeoForSido(sidoCd, curEl().year);
+  
+  updateMapColors();
+
+  const feat = ST.sidoGeo.features.find(f => f.properties.sidoCd === sidoCd);
+  if (feat) {
+      const svgEl = document.getElementById('map-svg');
+      const W = svgEl.clientWidth, H = svgEl.clientHeight;
+      const [[x0,y0],[x1,y1]] = _path.bounds(feat);
+      const pw = x1-x0, ph = y1-y0;
+      if (pw>0 && ph>0) {
+          const scale = Math.min(18, 0.82 / Math.max(pw/W, ph/H));
+          const tx = W/2 - scale*(x0+pw/2), ty = H/2 - scale*(y0+ph/2);
+          const t = d3.zoomIdentity.translate(tx,ty).scale(scale);
+          d3.select('#map-svg').transition().duration(650).call(ST.zoomBehavior.transform, t);
+      }
+  }
+
+  showDetail(sidoNm);
+  buildSggResultPanel(sidoNm);
+}
+
+function drillUp(){
+  if(!ST.selectedSidoCd)return;
+  ST.selectedSidoCd = null;
+  ST.selectedSidoNm = null;
+  
+  document.getElementById('drill-nav').style.display='none';
+  document.getElementById('opacity-row').style.display='none';
+  document.getElementById('stroke-row').style.display='flex'; 
+  
+  updateMapColors();
+  
+  if(ST.zoomBehavior){
+    d3.select('#map-svg').transition().duration(600).call(ST.zoomBehavior.transform,d3.zoomIdentity);
+  }
+  ST.currentTransform=d3.zoomIdentity;
+  clearDetail();
+  renderList();
 }
 
 function resizeMap(){
@@ -895,69 +968,22 @@ function resizeMap(){
   d3.selectAll('.sgg-path').attr('d', _path);
   
   d3.selectAll('.sido-lbl').attr('transform',function(d){
-      const ct=_path.centroid(d);
-      let nm = getSidoNameFromProps(d.properties);
-      if(nm === '경기도') { ct[0] += 15; ct[1] += 25; }
-      return `translate(${ct[0]},${ct[1]})`;
+      let x=d.cx, y=d.cy;
+      if(d.sidoNm === '경기도') { x += 15; y += 25; }
+      return `translate(${x},${y})`;
   });
-  d3.selectAll('.sgg-lbl').attr('transform',d=>{try{const ct=_path.centroid(d);return `translate(${ct[0]},${ct[1]})`;}catch{return 'translate(0,0)';}});
+  d3.selectAll('.sgg-lbl').attr('transform',d=>`translate(${d.cx},${d.cy})`);
   
-  if(ST.selectedSido&&ST.zoomBehavior){
-    const t=_zoomToSido(ST.selectedSido);
-    if(t)d3.select('#map-svg').call(ST.zoomBehavior.transform,t);
+  if(ST.selectedSidoCd&&ST.zoomBehavior){
+      const feat = ST.sidoGeo.features.find(f => f.properties.sidoCd === ST.selectedSidoCd);
+      if(feat) {
+          const [[x0,y0],[x1,y1]] = _path.bounds(feat);
+          const pw = x1-x0, ph = y1-y0;
+          const scale = Math.min(18, 0.82 / Math.max(pw/W, ph/H));
+          const tx = W/2 - scale*(x0+pw/2), ty = H/2 - scale*(y0+ph/2);
+          d3.select('#map-svg').call(ST.zoomBehavior.transform, d3.zoomIdentity.translate(tx,ty).scale(scale));
+      }
   }
-}
-
-function drillDown(sidoName){
-  if(!_mapInitialized)return;
-  ST.selectedSido=sidoName;
-
-  document.getElementById('drill-nav').style.display='block';
-  document.getElementById('opacity-row').style.display='flex';
-  document.getElementById('stroke-row').style.display='none';
-
-  updateMapColors(); // ⚠️ SIDO 레이어를 끄고 SGG 레이어로 전체 스위칭
-
-  const t=_zoomToSido(sidoName);
-  if(t)d3.select('#map-svg').transition().duration(650).call(ST.zoomBehavior.transform,t);
-
-  showDetail(sidoName);
-  buildSggResultPanel(sidoName);
-}
-
-function _zoomToSido(sidoName){
-  const feat=ST.sidoGeo?.features.find(f=>getSidoNameFromProps(f.properties)===sidoName);
-  if(!feat||!ST.zoomBehavior||!_path)return;
-  const svgEl=document.getElementById('map-svg');
-  const W=svgEl.clientWidth||700,H=svgEl.clientHeight||600;
-  try{
-    const[[x0,y0],[x1,y1]]=_path.bounds(feat);
-    const pw=x1-x0,ph=y1-y0;
-    if(pw>0&&ph>0){
-      const scale=Math.min(18,0.82/Math.max(pw/W,ph/H));
-      const tx=W/2-scale*(x0+pw/2),ty=H/2-scale*(y0+ph/2);
-      return d3.zoomIdentity.translate(tx,ty).scale(scale);
-    }
-  }catch(e){console.warn('[zoom]',e);}
-  return null;
-}
-
-function drillUp(){
-  if(!ST.selectedSido)return;
-  ST.selectedSido=null;
-  
-  document.getElementById('drill-nav').style.display='none';
-  document.getElementById('opacity-row').style.display='none';
-  document.getElementById('stroke-row').style.display='flex';
-  
-  updateMapColors(); // ⚠️ 다시 전국 SIDO 지도로 스위칭
-  
-  if(ST.zoomBehavior){
-    d3.select('#map-svg').transition().duration(600).call(ST.zoomBehavior.transform,d3.zoomIdentity);
-  }
-  ST.currentTransform=d3.zoomIdentity;
-  clearDetail();
-  renderList();
 }
 
 function changeBgOpacity(val) {
@@ -971,94 +997,56 @@ function changeStrokeWidth(val) {
   d3.select('#sido-layer').attr('stroke-width', ST.sidoStrokeWidth / k);
 }
 
-function buildSggResultPanel(sidoName){
+// ════════════════════════════════════════════
+//  UI PANELS & TOOLTIPS 
+// ════════════════════════════════════════════
+function buildSggResultPanel(sidoNm){
   const sgId=ST.currentSgId;
-  const sggData=D_SGG[sgId]?.[sidoName]||null;
-  const hasFallback=!sggData&&D_SGG['20220601']?.[sidoName];
-  const noSgg=NO_SGG.includes(sidoName);
+  const sggData=ST.D_SGG[sgId]?.[sidoNm]||null;
+  const hasFallback=!sggData&&ST.D_SGG['20220601']?.[sidoNm];
   const listEl=document.getElementById('sido-list');
-  if(noSgg){
-    listEl.innerHTML='<div style="padding:10px 8px;font-size:11px;color:var(--dim)">기초단체장 선거 없음</div>';return;
-  }
+  if(NO_SGG.includes(sidoNm)){ listEl.innerHTML='<div style="padding:10px 8px;font-size:11px;color:var(--dim)">기초단체장 선거 없음</div>';return; }
   if(!sggData){
-    const yr=ELECTIONS.find(e=>e.sgId===sgId)?.year||sgId;
-    const loadingMsg=ST.apiKey?`⏳ ${yr}년 시군구 결과 로딩 중...`:`${yr}년 기초단체장 데이터 없음`;
+    const loadingMsg=ST.apiKey?`⏳ 시군구 결과 로딩 중...`:`기초단체장 데이터 없음`;
     listEl.innerHTML=`<div style="padding:10px 8px;font-size:11px;color:var(--dim)">${loadingMsg}<br><span style="color:${hasFallback?'#6a9af5':'var(--dim)'}">${hasFallback?'광역단체장 기준으로 색상 표시됨':'(광역단체장 기준 색상)'}</span></div>`;return;
   }
-  const counts={};
-  Object.entries(sggData).forEach(([,p])=>{counts[p]=(counts[p]||0)+1;});
-  const shortNm=sidoName.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
-  let html=`<div id="list-hdr" style="font-size:11px;color:var(--dim);font-weight:600;padding:4px 8px 5px">기초단체장 · ${shortNm}</div>`;
-  html+=`<div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 8px 8px">`;
-  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([p,n])=>{
-    html+=`<span style="font-size:11px;padding:2px 7px;border-radius:3px;font-weight:700;background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}</span>`;
-  });
+  const counts={}; Object.entries(sggData).forEach(([,p])=>{counts[p]=(counts[p]||0)+1;});
+  let html=`<div id="list-hdr" style="font-size:11px;color:var(--dim);font-weight:600;padding:4px 8px 5px">기초단체장 · ${shortSido(sidoNm)}</div><div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 8px 8px">`;
+  Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([p,n])=>{ html+=`<span style="font-size:11px;padding:2px 7px;border-radius:3px;font-weight:700;background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}</span>`; });
   html+=`</div>`;
   Object.entries(sggData).forEach(([nm,party])=>{
-    const detail=ST.sggDetail?.[sgId]?.[sidoName]?.[nm];
+    const detail=ST.sggDetail?.[sgId]?.[sidoNm]?.[nm];
     const top=detail?.cands?.[0];
-    const isUncontested = detail?.status==='uncontested';
-    const statusBadge = isUncontested
-      ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span>`
-      : (top ? `<span style="font-size:10px;color:var(--dim)">${top.pct}%</span>` : '');
-    const candName = (!isUncontested && top) ? top.name : '';
-    html+=`<div class="srow" style="cursor:default">
-      <div class="sdot" style="background:${pc(party)}"></div>
-      <div class="sname">${nm}</div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="sparty" style="color:${pc(party)}">${ps(party)}</span>
-          ${statusBadge}
-        </div>
-        ${candName?`<div style="font-size:10px;color:var(--sub);margin-top:1px">${candName}</div>`:''}
-      </div>
-    </div>`;
+    const isUnc = detail?.status === 'uncontested';
+    const bge = isUnc ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span>` : (top ? `<span style="font-size:10px;color:var(--dim)">${top.pct}%</span>` : '');
+    const candName = (!isUnc && top) ? top.name : '';
+    html+=`<div class="srow" style="cursor:default"><div class="sdot" style="background:${pc(party)}"></div><div class="sname">${nm}</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:center"><span class="sparty" style="color:${pc(party)}">${ps(party)}</span>${bge}</div>${candName?`<div style="font-size:10px;color:var(--sub);margin-top:1px">${candName}</div>`:''}</div></div>`;
   });
   listEl.innerHTML=html;
 }
 
-// ════════════════════════════════════════════
-//  TOOLTIP & DETAIL
-// ════════════════════════════════════════════
 function showMainTooltip(ev,nm,mapW){
   const d=ST.data[nm];if(!d)return;
   const tt=document.getElementById('tooltip');
   let h=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">${nm} <span style="font-size:10px;color:var(--dim);font-weight:400">광역단체장</span></div>`;
-  h+=`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px"><div style="width:7px;height:7px;border-radius:2px;background:${pc(d.winner)}"></div><span style="font-size:12px;font-weight:700;color:${pc(d.winner)}">${d.winner}</span></div>`;
-  if(d.status==='uncontested'){
-    h+=`<div style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3);display:inline-block;margin-bottom:6px">무투표 당선</div>`;
-  }else{
-    h+=`<div style="font-size:10px;color:var(--sub);margin-bottom:6px">개표율 ${d.rate}%</div>`;
-    d.cands.slice(0,3).forEach((c,i)=>{h+=`<div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name}</span><span style="color:${pc(c.party)};font-weight:700">${c.pct}%</span></div><div style="background:#0c1220;height:2px;border-radius:1px"><div style="width:${c.pct}%;height:100%;background:${pc(c.party)};opacity:${i===0?1:.4};border-radius:1px"></div></div></div>`;});
-  }
+  h+=`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px"><div style="width:7px;height:7px;border-radius:2px;background:${pc(d.winner)}"></div><span style="font-size:12px;font-weight:700;color:${pc(d.winner)}">${d.winner}</span></div><div style="font-size:10px;color:var(--sub);margin-bottom:6px">개표율 ${d.rate}%</div>`;
+  d.cands.slice(0,3).forEach((c,i)=>{h+=`<div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px"><span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name}</span><span style="color:${pc(c.party)};font-weight:700">${c.pct}%</span></div><div style="background:#0c1220;height:2px;border-radius:1px"><div style="width:${c.pct}%;height:100%;background:${pc(c.party)};opacity:${i===0?1:.4};border-radius:1px"></div></div></div>`;});
   tt.innerHTML=h;tt.classList.add('on');moveTooltip(ev,mapW);
 }
 
-function showSggTooltip(ev,sggName,party,sidoName){
+function showSggTooltip(ev,sggName,party,sidoNm){
   const tt=document.getElementById('tooltip');
   let h=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">${sggName}</div>`;
   if(party){
-    h+=`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
-      <div style="width:7px;height:7px;border-radius:2px;background:${pc(party)}"></div>
-      <span style="font-size:11px;font-weight:700;color:${pc(party)}">${party}</span>
-    </div>`;
-
-    // detail 매칭: _parentCity 우선, 없으면 normalize 기반 fuzzy
-    const detail=ST.sggDetail?.[ST.currentSgId]?.[sidoName];
+    h+=`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px"><div style="width:7px;height:7px;border-radius:2px;background:${pc(party)}"></div><span style="font-size:11px;font-weight:700;color:${pc(party)}">${party}</span></div>`;
+    const detail=ST.sggDetail?.[ST.currentSgId]?.[sidoNm];
+    const cleanSgg = normalizeWiwName(sggName);
     let d = null;
-    if(detail){
-      const normalize = n => String(n).replace(/\s+/g,'').replace(/^[가-힣]+시(?=[가-힣]+[구군])/,'');
-      const nm = normalize(sggName);
-      // _parentCity에서 추출한 시 이름으로 먼저 직접 조회 (예: "안산 상록구" → "안산시")
-      const parentKey = Object.keys(detail).find(k=>DISTRICT_TO_CITY[nm.replace(/[가-힣]+시$/,'')] === k || k===sggName.split(/\s/)[0]+'시');
-      const matchKey = parentKey || Object.keys(detail).find(k => {
-        const kn = normalize(k);
-        return kn === nm || nm.includes(kn) || kn.includes(nm);
-      });
+    if(detail) {
+      const matchKey = Object.keys(detail).find(k => normalizeWiwName(k) === cleanSgg || normalizeWiwName(k).includes(cleanSgg) || cleanSgg.includes(normalizeWiwName(k)));
       d = detail[matchKey];
     }
-
-    // 개표율 표시 (status가 있는 경우)
+    
     if(d?.rate != null){
       let statusTxt, statusColor;
       if(d.status==='uncontested'){
@@ -1072,32 +1060,17 @@ function showSggTooltip(ev,sggName,party,sidoName){
     }
 
     if(d?.cands){
-      d.cands.slice(0,3).forEach((c,i)=>{
-        h+=`<div style="margin-bottom:3px">
-          <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:1px">
-            <span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name}</span>
-            <span style="color:${pc(c.party)};font-weight:700">${c.pct}%</span>
-          </div>
-          <div style="background:#0c1220;height:2px;border-radius:1px">
-            <div style="width:${Math.min(c.pct,100)}%;height:100%;background:${pc(c.party)};opacity:${i===0?1:.4};border-radius:1px"></div>
-          </div></div>`;
-      });
-    }else{
-      h+=`<div style="font-size:10px;color:var(--dim);margin-top:3px">기초단체장</div>`;
-    }
-  }else{
-    h+='<div style="font-size:11px;color:var(--sub)">집계 중</div>';
-  }
-  tt.innerHTML=h;tt.classList.add('on');
-  moveTooltip(ev,document.getElementById('map-svg').clientWidth);
+      d.cands.slice(0,3).forEach((c,i)=>{ h+=`<div style="margin-bottom:3px"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:1px"><span style="color:${i===0?'var(--text)':'var(--sub)'}">${c.name}</span><span style="color:${pc(c.party)};font-weight:700">${c.pct===100&&d.status==='uncontested'?'':c.pct+'%'}</span></div><div style="background:#0c1220;height:2px;border-radius:1px"><div style="width:${Math.min(c.pct,100)}%;height:100%;background:${pc(c.party)};opacity:${i===0?1:.4};border-radius:1px"></div></div></div>`; });
+    }else{ h+=`<div style="font-size:10px;color:var(--dim);margin-top:3px">기초단체장</div>`; }
+  }else{ h+='<div style="font-size:11px;color:var(--sub)">집계 중</div>'; }
+  tt.innerHTML=h;tt.classList.add('on'); moveTooltip(ev,document.getElementById('map-svg').clientWidth);
 }
 
 function moveTooltip(ev,mapW){
   const tt=document.getElementById('tooltip');if(!tt.classList.contains('on'))return;
   const r=document.getElementById('map-area').getBoundingClientRect();
   const x=ev.clientX-r.left,y=ev.clientY-r.top;
-  const tw=tt.offsetWidth+12;
-  tt.style.left=(x+tw>mapW?x-tw:x+12)+'px';
+  tt.style.left=(x+tt.offsetWidth+12>mapW?x-tt.offsetWidth:x+12)+'px';
   tt.style.top=Math.min(y-10,r.height-160)+'px';
 }
 function hideTooltip(){document.getElementById('tooltip').classList.remove('on');}
@@ -1110,128 +1083,98 @@ function showDetail(name){
   const col=pc(d.winner);
   const b=document.getElementById('det-badge');
   const status=d.status||(d.rate===100?'final':d.rate!=null?'counting':'unknown');
-  const badgeText=status==='uncontested'?`${d.winner} 무투표당선`:status==='final'?`${d.winner} 당선`:status==='counting'?`${d.winner} 선두`:`집계 중`;
   b.style.cssText=`background:${col}22;border:1px solid ${col}66;color:${col}`;
-  b.textContent=badgeText;
-  
-  const ctxEl=document.getElementById('det-ctx');
-  if(ctxEl)ctxEl.textContent=ST.selectedSido?'광역단체장':'광역단체장';
-  
-  const isUncontestedSido = status === 'uncontested';
-  const rateStr=isUncontestedSido?'무투표 당선':d.rate!=null?`${typeof d.rate==='number'?d.rate.toFixed(1):d.rate}%`:'집계 중';
-  const ratePct=isUncontestedSido?100:d.rate!=null?Math.min(100,Math.max(0,d.rate)):0;
-  document.getElementById('det-rf').style.cssText=`width:${ratePct}%;background:${isUncontestedSido?'#a78bfa':col}`;
-  document.getElementById('det-rv').textContent=rateStr;
+  b.textContent=status==='final'?`${d.winner} 당선`:status==='counting'?`${d.winner} 선두`:`집계 중`;
+  document.getElementById('det-ctx').textContent=ST.selectedSidoCd?'광역단체장':'광역단체장';
+  document.getElementById('det-rf').style.cssText=`width:${d.rate!=null?Math.min(100,Math.max(0,d.rate)):0}%;background:${col}`;
+  document.getElementById('det-rv').textContent=d.rate!=null?`${d.rate}%`:'집계 중';
   
   document.getElementById('det-cands').innerHTML=(d.cands||[]).map((c2,i)=>{
-    if(isUncontestedSido){
-      return `<div class="dc"><div class="dc-row"><span style="color:var(--text);font-weight:700">${c2.name} <span style="color:${pc(c2.party)};font-size:10px">${ps(c2.party)}</span></span><span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span></div></div>`;
-    }
     const pct=typeof c2.pct==='number'&&!isNaN(c2.pct)?c2.pct:0;
     return `<div class="dc"><div class="dc-row"><span style="color:${i===0?'var(--text)':'var(--sub)'};font-weight:${i===0?700:400}">${c2.name} <span style="color:${pc(c2.party)};font-size:10px">${ps(c2.party)}</span></span><span style="font-weight:700;color:${pc(c2.party)}">${pct}%</span></div><div class="dcb"><div class="dcf" style="width:${pct}%;background:${pc(c2.party)};opacity:${i===0?1:.4}"></div></div><div class="dcv">${fmt(c2.votes)}표</div></div>`;
   }).join('');
   
   const sggSumEl=document.getElementById('det-sgg-summary');
-  if(sggSumEl){
-    if(ST.selectedSido&&ST.selectedSido===name){
-      const sggData=D_SGG[ST.currentSgId]?.[name]||null;
+  if(ST.selectedSidoNm === name){
+      const sggData=ST.D_SGG[ST.currentSgId]?.[name]||null;
       if(sggData){
-        const counts={};
-        Object.entries(sggData).forEach(([,p])=>{counts[p]=(counts[p]||0)+1;});
-        sggSumEl.innerHTML=`<div style="font-size:10px;color:var(--dim);font-weight:600;margin-bottom:5px">기초단체장</div>`
-          +Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([p,n])=>
-            `<span style="font-size:11px;padding:1px 6px;border-radius:2px;font-weight:700;margin-right:4px;background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}</span>`
-          ).join('');
+        const counts={}; Object.entries(sggData).forEach(([,p])=>{counts[p]=(counts[p]||0)+1;});
+        sggSumEl.innerHTML=`<div style="font-size:10px;color:var(--dim);font-weight:600;margin-bottom:5px">기초단체장</div>`+Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([p,n])=>`<span style="font-size:11px;padding:1px 6px;border-radius:2px;font-weight:700;margin-right:4px;background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}</span>`).join('');
         sggSumEl.style.display='block';
       }else{sggSumEl.style.display='none';}
-    }else{sggSumEl.style.display='none';}
-  }
+  }else{sggSumEl.style.display='none';}
 }
 function clearDetail(){document.getElementById('det-ph').style.display='block';document.getElementById('det-ct').style.display='none';}
 
 // ════════════════════════════════════════════
-//  SUMMARY BAR & LIST & EXPORT & OTHERS
+//  SUMMARY BAR & LIST & EXPORT
 // ════════════════════════════════════════════
 function renderSummaryBar(){
-  const valid=SIDO_ALL.filter(s=>ST.data[s]);
-  const cnt={};valid.forEach(s=>{const w=ST.data[s].winner;cnt[w]=(cnt[w]||0)+1;});
-  const tot=valid.length;const srt=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
-  document.getElementById('sb-lbl').textContent=`광역단체장 ${tot}석`;
-  document.getElementById('seat-bar').innerHTML=srt.map(([p,n])=>`<div class="seat-seg" style="width:${n/tot*100}%;background:${pc(p)}"></div>`).join('');
-  document.getElementById('party-chips').innerHTML=srt.map(([p,n])=>`<div class="pchip"><div class="pdot" style="background:${pc(p)}"></div><span class="pcnt" style="color:${pc(p)}">${n}</span><span class="pname">${ps(p)}</span></div>`).join('');
-  const avg=valid.reduce((s,k)=>s+(ST.data[k]?.rate||0),0)/valid.length;
-  document.getElementById('avg-rate-val').textContent=valid.length?avg.toFixed(1)+'%':'0.0%';
+  if (ST.mapLevel === 'sido') {
+      const valid=SIDO_ALL.filter(s=>ST.data[s]);
+      const cnt={};valid.forEach(s=>{const w=ST.data[s].winner;cnt[w]=(cnt[w]||0)+1;});
+      const tot=valid.length;const srt=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
+      document.getElementById('sb-lbl').textContent=`광역단체장 ${tot}석`;
+      document.getElementById('seat-bar').innerHTML=srt.map(([p,n])=>`<div class="seat-seg" style="width:${n/tot*100}%;background:${pc(p)}"></div>`).join('');
+      document.getElementById('party-chips').innerHTML=srt.map(([p,n])=>`<div class="pchip"><div class="pdot" style="background:${pc(p)}"></div><span class="pcnt" style="color:${pc(p)}">${n}</span><span class="pname">${ps(p)}</span></div>`).join('');
+      const avg=valid.reduce((s,k)=>s+(ST.data[k]?.rate||0),0)/valid.length;
+      document.getElementById('avg-rate-val').textContent=valid.length?avg.toFixed(1)+'%':'0.0%';
+  } else {
+      let totalSgg = 0; const cnt={};
+      Object.keys(ST.D_SGG[ST.currentSgId] || {}).forEach(sidoNm => {
+          const sggData = ST.D_SGG[ST.currentSgId][sidoNm];
+          Object.keys(sggData).forEach(sggNm => { const w = sggData[sggNm]; cnt[w] = (cnt[w]||0)+1; totalSgg++; });
+      });
+      if (totalSgg === 0) {
+         document.getElementById('sb-lbl').textContent=`기초단체장`;
+         document.getElementById('seat-bar').innerHTML='';
+         document.getElementById('party-chips').innerHTML='';
+         document.getElementById('avg-rate-val').textContent='-';
+      } else {
+         const srt=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
+         document.getElementById('sb-lbl').textContent=`기초단체장 ${totalSgg}석`;
+         document.getElementById('seat-bar').innerHTML=srt.map(([p,n])=>`<div class="seat-seg" style="width:${n/totalSgg*100}%;background:${pc(p)}"></div>`).join('');
+         document.getElementById('party-chips').innerHTML=srt.map(([p,n])=>`<div class="pchip"><div class="pdot" style="background:${pc(p)}"></div><span class="pcnt" style="color:${pc(p)}">${n}</span><span class="pname">${ps(p)}</span></div>`).join('');
+         document.getElementById('avg-rate-val').textContent='-';
+      }
+  }
 }
+
 function renderList(){
   document.getElementById('sido-list').innerHTML=SIDO_ALL.map(nm=>{
     const d=ST.data[nm];
     if(!d)return`<div class="srow" style="opacity:.2;pointer-events:none"><div class="sdot" style="background:#333"></div><div class="sname">${shortSido(nm)}</div></div>`;
+    const cd = Object.keys(SIDO_CODE_MAP).find(key => SIDO_CODE_MAP[key] === nm && key.length === 2);
     const c=pc(d.winner);
-    const isUncont = d.status==='uncontested';
-    const rateHtml = isUncont
-      ? `<span style="font-size:9px;padding:1px 4px;border-radius:2px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span>`
-      : `<div class="srate-wrap"><div class="srn">${typeof d.rate==='number'?d.rate.toFixed?d.rate.toFixed(0):d.rate:d.rate}%</div><div class="srb"><div class="srf" style="width:${d.rate}%;background:${c};opacity:.5"></div></div></div>`;
-    return`<div class="srow" id="sr-${nm}" onclick="drillDown('${nm}')"><div class="sdot" style="background:${c}"></div><div class="sname">${shortSido(nm)}</div><div class="sparty" style="color:${c}">${ps(d.winner)}</div>${rateHtml}</div>`;
+    return`<div class="srow" id="sr-${nm}" onclick="drillDown('${cd}', '${nm}')"><div class="sdot" style="background:${c}"></div><div class="sname">${shortSido(nm)}</div><div class="sparty" style="color:${c}">${ps(d.winner)}</div><div class="srate-wrap"><div class="srn">${typeof d.rate==='number'?d.rate.toFixed?d.rate.toFixed(0):d.rate:d.rate}%</div><div class="srb"><div class="srf" style="width:${d.rate}%;background:${c};opacity:.5"></div></div></div></div>`;
   }).join('');
 }
 function renderLegend(){
   const cnt={};SIDO_ALL.filter(s=>ST.data[s]).forEach(s=>{const w=ST.data[s].winner;cnt[w]=(cnt[w]||0)+1;});
   document.getElementById('legend').innerHTML=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(([p])=>`<div class="leg-row"><div class="leg-dot" style="background:${pc(p)}"></div><span class="leg-lbl">${PDB[p]?.short??p}</span></div>`).join('');
 }
-function toggleLabels(v){
-  ST.showLabels=v;
-  document.getElementById('lbl-btn').classList.toggle('on',v);
-  updateMapColors(); 
-}
+function toggleLabels(v){ ST.showLabels=v; document.getElementById('lbl-btn').classList.toggle('on',v); updateMapColors(); }
 function exportMapPNG(withLabels){
   const svgEl=document.getElementById('map-svg');
-  const SCALE=2; 
-  const W=svgEl.clientWidth,H=svgEl.clientHeight;
-  const CW=W*SCALE,CH=H*SCALE;
-
+  const SCALE=2; const W=svgEl.clientWidth,H=svgEl.clientHeight; const CW=W*SCALE,CH=H*SCALE;
   const clone=svgEl.cloneNode(true);
-  clone.setAttribute('width',CW);
-  clone.setAttribute('height',CH);
-  clone.setAttribute('viewBox',`0 0 ${W} ${H}`);
-  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
-  clone.style.background='transparent';
-
-  const g=clone.querySelector('#map-g');
-  if(g&&ST.currentTransform){
-    const t=ST.currentTransform;
-    g.setAttribute('transform',`translate(${t.x},${t.y}) scale(${t.k})`);
-    
-    const sggL = clone.querySelector('#sgg-layer');
-    if (sggL) sggL.setAttribute('stroke-width', 0.4 / t.k);
-    const sidoL = clone.querySelector('#sido-layer');
-    if (sidoL) sidoL.setAttribute('stroke-width', ST.sidoStrokeWidth / t.k);
-    
-    clone.querySelectorAll('.sido-lbl,.sgg-lbl').forEach(txt=>{
-      const fs=parseFloat(txt.getAttribute('font-size')||'11');
-      txt.setAttribute('font-size',Math.max(3,fs/t.k));
-    });
+  clone.setAttribute('width',CW); clone.setAttribute('height',CH); clone.setAttribute('viewBox',`0 0 ${W} ${H}`); clone.style.background='transparent';
+  if(clone.querySelector('#map-g') && ST.currentTransform){
+    const t=ST.currentTransform; clone.querySelector('#map-g').setAttribute('transform',`translate(${t.x},${t.y}) scale(${t.k})`);
+    if (clone.querySelector('#sido-layer')) clone.querySelector('#sido-layer').setAttribute('stroke-width', ST.sidoStrokeWidth / t.k);
+    if (clone.querySelector('#sgg-layer')) clone.querySelector('#sgg-layer').setAttribute('stroke-width', 0.5 / t.k);
+    clone.querySelectorAll('.sido-lbl,.sgg-lbl').forEach(txt=>{ txt.setAttribute('font-size',Math.max(3,parseFloat(txt.getAttribute('font-size')||'11')/t.k)); });
   }
-
   clone.querySelectorAll('[style*="display: none"]').forEach(e => e.remove());
-
   if(!withLabels) clone.querySelectorAll('.sido-lbl,.sgg-lbl').forEach(e=>e.remove());
   else clone.querySelectorAll('text').forEach(t=>t.setAttribute('font-family',"Pretendard,'Apple SD Gothic Neo','Malgun Gothic','나눔고딕',sans-serif"));
-
-  const svgStr=new XMLSerializer().serializeToString(clone);
-  const url=URL.createObjectURL(new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'}));
+  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml;charset=utf-8'}));
   const img=new Image();
   img.onload=()=>{
-    const cv=document.createElement('canvas');
-    cv.width=CW;cv.height=CH;
-    const ctx=cv.getContext('2d');
-    ctx.clearRect(0,0,CW,CH);
-    ctx.drawImage(img,0,0,CW,CH);
-    const a=document.createElement('a');
-    const suffix=ST.selectedSido?`_${ST.selectedSido.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'')}`:'_전국';
-    a.download=`election_${curEl().year}${suffix}_${withLabels?'글자':'지도만'}.png`;
-    a.href=cv.toDataURL('image/png');
-    a.click();
-    URL.revokeObjectURL(url);
+    const cv=document.createElement('canvas'); cv.width=CW;cv.height=CH;
+    const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,CW,CH);
+    const a=document.createElement('a'); a.download=`election_${curEl().year}${ST.selectedSidoNm?`_${ST.selectedSidoNm.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'')}`:'_전국'}_${withLabels?'글자':'지도만'}.png`;
+    a.href=cv.toDataURL('image/png'); a.click(); URL.revokeObjectURL(url);
   };
   img.src=url;
 }
@@ -1239,26 +1182,19 @@ function exportMapPNG(withLabels){
 // ════════════════════════════════════════════
 //  TABS & API POLLING
 // ════════════════════════════════════════════
-function renderTabs(){
-  document.getElementById('election-tabs').innerHTML=ELECTIONS.map(e=>`<div class="etab${e.sgId===ST.currentSgId?' active':''}" onclick="switchElection('${e.sgId}')"><span class="tab-year">${e.year}</span> <span style="font-size:10px;opacity:.6">${e.round}</span> <span class="tab-badge ${e.status==='upcoming'?'upcoming':'done'}">${e.status==='upcoming'?'예정':'확정'}</span></div>`).join('');
-}
+function renderTabs(){ document.getElementById('election-tabs').innerHTML=ELECTIONS.map(e=>`<div class="etab${e.sgId===ST.currentSgId?' active':''}" onclick="switchElection('${e.sgId}')"><span class="tab-year">${e.year}</span> <span style="font-size:10px;opacity:.6">${e.round}</span> <span class="tab-badge ${e.status==='upcoming'?'upcoming':'done'}">${e.status==='upcoming'?'예정':'확정'}</span></div>`).join(''); }
 
 async function switchElection(sgId){
-  if(ST.isLive)toggleLive();
-  stopPolling();
-  if(ST.selectedSido) drillUp();
+  if(ST.isLive)toggleLive(); stopPolling();
+  if(ST.selectedSidoCd) drillUp();
   
   ST.currentSgId=sgId;
   const targetYear = curEl().year;
 
-  if(!ST._loaded){ST._loaded={};}
-  if(ST._loaded[sgId]){
-    ST.data=ST._loaded[sgId];
-    ST.dataSource='api';
-  }else{
-    ST.data={};
-    ST.dataSource='none';
-  }
+  if(!ST._loaded) ST._loaded={};
+  if(ST._loaded[sgId]){ ST.data=ST._loaded[sgId]; ST.dataSource='api'; }
+  else { ST.data={}; ST.dataSource='none'; }
+  
   renderTabs();updateHeader();clearDetail();
   await loadGeo(targetYear);
 }
@@ -1269,11 +1205,10 @@ function updateHeader(){
   document.getElementById('header-sub').textContent=`${el.round} · ${el.date} · 광역단체장(시·도지사)`;
   document.getElementById('btn-live').style.display=isUpcoming()?'block':'none';
   document.getElementById('btn-fetch').style.display=ST.apiKey?'block':'none';
-  const b=document.getElementById('data-src-badge');
-  b.className=ST.dataSource;
-  if(ST.dataSource==='api')       {b.className='api';b.textContent='선관위 API';}
+  const b=document.getElementById('data-src-badge'); b.className=ST.dataSource;
+  if(ST.dataSource==='api') {b.className='api';b.textContent='선관위 API';}
   else if(ST.dataSource==='mock') {b.className='mock';b.textContent='MOCK 데이터';}
-  else                            {b.className='none';b.textContent='데이터 없음 — ↻ API 버튼 클릭';}
+  else {b.className='none';b.textContent='데이터 없음 — ↻ API 버튼 클릭';}
 }
 
 function toggleLive(){
@@ -1281,11 +1216,11 @@ function toggleLive(){
   ST.isLive=!ST.isLive;
   const btn=document.getElementById('btn-live');
   document.getElementById('live-badge').classList.toggle('on',ST.isLive);
-  btn.classList.toggle('live-on',ST.isLive);
-  btn.textContent=ST.isLive?'■ 중지':'▶ 실시간';
+  btn.classList.toggle('live-on',ST.isLive); btn.textContent=ST.isLive?'■ 중지':'▶ 실시간';
   if(ST.isLive){poll();ST.pollTimer=setInterval(poll,ST.pollSec*1000);}else stopPolling();
 }
 function stopPolling(){if(ST.pollTimer){clearInterval(ST.pollTimer);ST.pollTimer=null;}}
+
 async function poll(){
   if(ST.mode==='mock'){
     let ch=false;
@@ -1293,8 +1228,7 @@ async function poll(){
       const d=ST.data[k];
       if(d&&(d.rate==null||d.rate<100)){
         d.rate=Math.min(100,+((d.rate||0)+Math.random()*3.5).toFixed(1));
-        d.status=d.rate>=100?'final':'counting';
-        ch=true;
+        d.status=d.rate>=100?'final':'counting'; ch=true;
       }
     });
     if(ch){updateMapColors();renderSummaryBar();renderList();}
@@ -1309,269 +1243,122 @@ async function fetchHistorical(){
   const btn=document.getElementById('btn-fetch');btn.textContent='...';btn.disabled=true;
   try{
     await fetchAllSidoAPI(ST.currentSgId);
-    ST.dataSource='api';
-    updateHeader();
+    ST.dataSource='api'; updateHeader();
     const sggEl=document.getElementById('err-msg');
     if(sggEl){sggEl.textContent='시군구 개표 결과 로딩 중...';sggEl.classList.add('show');}
     await fetchAllSggAPI(ST.currentSgId);
     if(sggEl)setTimeout(()=>sggEl.classList.remove('show'),2000);
-  }finally{
-    btn.textContent='↻ API';btn.disabled=false;
-  }
+  }finally{ btn.textContent='↻ API';btn.disabled=false; }
 }
 
-const NEC_SIDO_NAMES={
-  '강원특별자치도':['강원특별자치도','강원도'],
-  '전북특별자치도':['전북특별자치도','전라북도'],
-  '제주특별자치도':['제주특별자치도','제주도'],
-};
-
+const NEC_SIDO_NAMES={'강원특별자치도':['강원특별자치도','강원도'],'전북특별자치도':['전북특별자치도','전라북도'],'제주특별자치도':['제주특별자치도','제주도']};
 async function _necFetch(necUrl){
   const url=ST.proxyUrl ? ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}` : necUrl;
-  const r=await fetch(url);
-  if(!r.ok)throw new Error(`HTTP ${r.status}`);
-  const j=await r.json();
-  const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+  const r=await fetch(url); if(!r.ok)throw new Error(`HTTP ${r.status}`);
+  const j=await r.json(); const items=j?.response?.body?.items?.item??j?.body?.items?.item;
   return Array.isArray(items)?items:(items?[items]:null);
 }
 
 async function fetchOneSido(sgId,nm){
-  const nameList=NEC_SIDO_NAMES[nm]||[nm];
-  let arr=null;
+  const nameList=NEC_SIDO_NAMES[nm]||[nm]; let arr=null;
   for(const sdName of nameList){
-    const necUrl=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
-      +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=3`
-      +`&sdName=${encodeURIComponent(sdName)}&numOfRows=50&pageNo=1&resultType=json`;
-    try{
-      arr=await _necFetch(necUrl);
-      if(arr&&arr.length)break;
-    }catch(e){}
+    const necUrl=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=3&sdName=${encodeURIComponent(sdName)}&numOfRows=50&pageNo=1&resultType=json`;
+    try{ arr=await _necFetch(necUrl); if(arr&&arr.length)break; }catch(e){}
   }
   if(!arr||!arr.length)return null;
-
   const row=arr.find(it=>!it.wiwName||it.wiwName===nm||it.wiwName==='')||arr[0];
-  const cands=[];
-  const yutusu=parseInt(row.yutusu||0);  
-  const tusu=parseInt(row.tusu||0);       
-  const sunsu=parseInt(row.sunsu||0);     
-  const tv=yutusu||tusu||1;
-
+  const cands=[]; const tv=(parseInt(row.yutusu||0)||parseInt(row.tusu||0)||1);
   for(let i=1;i<=50;i++){
-    const x=String(i).padStart(2,'0');
-    const party=row[`jd${x}`];
-    const name=row[`hbj${x}`];
-    const votes=parseInt(row[`dugsu${x}`]||0);
-    if(!name&&!votes)break;
-    if(isNaN(votes)||votes<0)continue;
-    cands.push({name:String(name||'').trim(),party:String(party||'무소속').trim(), votes,pct:+(votes/tv*100).toFixed(1)});
+    const x=String(i).padStart(2,'0'); const votes=parseInt(row[`dugsu${x}`]||0);
+    if(!row[`hbj${x}`]&&!votes)break; if(isNaN(votes)||votes<0)continue;
+    cands.push({name:String(row[`hbj${x}`]||'').trim(),party:String(row[`jd${x}`]||'무소속').trim(), votes,pct:+(votes/tv*100).toFixed(1)});
   }
-  cands.sort((a,b)=>b.votes-a.votes);
-  if(!cands.length)return null;
-
-  const totalDugsu=cands.reduce((s,c)=>s+c.votes,0);
-  let rate=null;
-  let uncontested=false;
-
-  // 무투표 당선: 후보 1명이고 총 득표수가 0
-  // yutusu/tusu 조건 제거 — 선관위 API는 sunsu(선거인수)만 있고
-  // yutusu/tusu가 0이 아닌 값으로 오는 케이스가 있음
-  if(cands.length===1 && totalDugsu===0){
-    uncontested=true;
-    rate=100;
-  } else if(yutusu>0&&totalDugsu>0){
-    const rawRate = totalDugsu/yutusu*100;
-    if(rawRate >= 99.0) rate = 100;
-    else rate = Math.min(99.9, +rawRate.toFixed(1));
-  } else if(tusu>0&&sunsu>0) {
-    const rawRate = tusu/sunsu*100;
-    if(rawRate >= 99.0) rate = 100;
-    else rate = Math.min(99.9, +rawRate.toFixed(1));
-  }
-  const status = uncontested ? 'uncontested' : (rate===100?'final':rate!==null?'counting':'unknown');
-  return{winner:cands[0].party,rate,status,cands, meta:{yutusu,tusu,sunsu}};  
+  cands.sort((a,b)=>b.votes-a.votes); if(!cands.length)return null;
+  const totalDugsu=cands.reduce((s,c)=>s+c.votes,0); let rate=null;
+  if((parseInt(row.yutusu||0))>0&&totalDugsu>0){ rate = Math.abs(totalDugsu-(parseInt(row.yutusu||0)))/(parseInt(row.yutusu||0))<0.01 ? 100 : Math.min(99.9,+(totalDugsu/(parseInt(row.yutusu||0))*100).toFixed(1)); }
+  return{winner:cands[0].party,rate,status:rate===100?'final':rate!==null?'counting':'unknown',cands};  
 }
 
 async function fetchAllSidoAPI(sgId){
-  const errEl=document.getElementById('err-msg');
-  errEl.classList.remove('show');
-  
-  let done=0,success=0;
-  const failed=[];
-
+  const errEl=document.getElementById('err-msg'); errEl.classList.remove('show');
+  let done=0,success=0; const failed=[];
   const tasks=SIDO_ALL.map(nm=>async()=>{
-    try{
-      const r=await fetchOneSido(sgId,nm);
-      if(r){ST.data[nm]=r;success++;}
-    }catch(err){ failed.push(shortSido(nm)); }
-    finally{
-      done++;
-      if(success>0&&_mapInitialized)updateMapColors();
-      errEl.textContent=`${done}/${SIDO_ALL.length} 갱신 중${failed.length?` (실패: ${failed.join(', ')})` :''}`;
-      errEl.classList.add('show');
-    }
+    try{ const r=await fetchOneSido(sgId,nm); if(r){ST.data[nm]=r;success++;} }catch(err){ failed.push(shortSido(nm)); }
+    finally{ done++; if(success>0&&_mapInitialized)updateMapColors(); errEl.textContent=`${done}/${SIDO_ALL.length} 갱신 중${failed.length?` (실패: ${failed.join(', ')})` :''}`; errEl.classList.add('show'); }
   });
-
-  let idx = 0;
-  const workers = Array.from({length: 5}, async () => {
-      while (idx < tasks.length) await tasks[idx++]();
-  });
-  await Promise.all(workers);
-
+  let idx = 0; await Promise.all(Array.from({length: 5}, async () => { while (idx < tasks.length) await tasks[idx++](); }));
   if(success>0){
-    if(!ST._loaded)ST._loaded={};
-    ST._loaded[sgId]=JSON.parse(JSON.stringify(ST.data));
-    ST.dataSource='api';
-    updateHeader();
-    preprocessSggColors(sgId);
-    
-    if(ST.sigunguGeo) preprocessSggColors(ST.currentSgId);
-    updateMapColors();
-    renderList();
-    renderSummaryBar();
-    
+    if(!ST._loaded)ST._loaded={}; ST._loaded[sgId]=JSON.parse(JSON.stringify(ST.data)); ST.dataSource='api'; updateHeader();
+    updateMapColors(); renderList(); renderSummaryBar();
     fetchAllSggAPI(sgId).catch(()=>{});
     errEl.textContent=failed.length ?`${success}/${SIDO_ALL.length} 완료, 실패: ${failed.join(', ')}`:`✅ API 갱신 완료`;
     setTimeout(()=>errEl.classList.remove('show'),4000);
-  }else{
-    errEl.textContent='⚠ API 호출 실패 — 키를 확인하세요';
-    errEl.classList.add('show');
-  }
+  }else{ errEl.textContent='⚠ API 호출 실패 — 키를 확인하세요'; errEl.classList.add('show'); }
 }
 
 async function _necFetchAll(baseUrl){
-  const first=await _necFetch(baseUrl+'&pageNo=1');
-  if(!first||!first.length)return first;
-  const url=ST.proxyUrl ? ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(baseUrl+'&pageNo=1')}` : baseUrl+'&pageNo=1';
-  const r=await fetch(url);
-  const j=await r.json();
-  const totalCount=parseInt(j?.response?.body?.totalCount||j?.body?.totalCount||first.length);
-  const numOfRows=100;
-  if(totalCount<=numOfRows)return first;
-  const pages=Math.ceil(totalCount/numOfRows);
-  const extras=await Promise.all(Array.from({length:pages-1},(_,i)=>_necFetch(baseUrl+`&pageNo=${i+2}`).catch(()=>null)));
-  const all=[...first];
-  extras.forEach(e=>{if(e)all.push(...e);});
-  return all;
+  const first=await _necFetch(baseUrl+'&pageNo=1'); if(!first||!first.length)return first;
+  const r=await fetch(ST.proxyUrl ? ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(baseUrl+'&pageNo=1')}` : baseUrl+'&pageNo=1');
+  const j=await r.json(); const totalCount=parseInt(j?.response?.body?.totalCount||j?.body?.totalCount||first.length);
+  if(totalCount<=100)return first;
+  const extras=await Promise.all(Array.from({length:Math.ceil(totalCount/100)-1},(_,i)=>_necFetch(baseUrl+`&pageNo=${i+2}`).catch(()=>null)));
+  const all=[...first]; extras.forEach(e=>{if(e)all.push(...e);}); return all;
 }
 
-async function fetchSggBySido(sgId,sidoNm){
-  const nameList=NEC_SIDO_NAMES[sidoNm]||[sidoNm];
-  let arr=null;
-  for(const sdName of nameList){
-    const baseUrl=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
-      +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4`
-      +`&sdName=${encodeURIComponent(sdName)}&numOfRows=100&resultType=json`;
-    try{
-      const rows=await _necFetchAll(baseUrl);
-      if(rows&&rows.length){ arr=rows; break; }
-    }catch(e){}
-  }
-  if(!arr||!arr.length)return null;
-
-  const result={};   
-  const detail={};   
-  for(const row of arr){
-    const wiwName=String(row.wiwName||'').trim();
-    if(!wiwName)continue;
-    const yutusu=parseInt(row.yutusu||0)||parseInt(row.tusu||0)||1;
-    const cands=[];
-    for(let i=1;i<=50;i++){
-      const x=String(i).padStart(2,'0');
-      const nm=String(row[`hbj${x}`]||'').trim();
-      const votes=parseInt(row[`dugsu${x}`]||0);
-      if(!nm&&!votes)break;
-      if(!isNaN(votes)&&votes>=0)
-        cands.push({name:nm,party:String(row[`jd${x}`]||'무소속').trim(), votes,pct:+(votes/yutusu*100).toFixed(1)});
-    }
-    cands.sort((a,b)=>b.votes-a.votes);
-    if(cands.length){
-      result[wiwName]=cands[0].party;
-      const totalV = cands.reduce((s,c)=>s+c.votes,0);
-      const rawYutusu = parseInt(row.yutusu||0);
-      const rawTusu   = parseInt(row.tusu||0);
-
-      // 무투표 당선: 후보 1명 + 총 득표수 0
-      // yutusu/tusu 조건 제거 (API 응답 케이스 다양)
-      const isUncontested = cands.length===1 && totalV===0;
-
-      let sggRate = null;
-      if(isUncontested){
-        sggRate = 100;
-      } else if(rawYutusu>0 && totalV>0){
-        const r = totalV/rawYutusu*100;
-        sggRate = r >= 99.0 ? 100 : Math.min(99.9, +r.toFixed(1));
-      }
-      detail[wiwName]={
-        winner: cands[0].party,
-        cands,
-        rate: sggRate,
-        status: isUncontested ? 'uncontested' : (sggRate===100?'final':sggRate!==null?'counting':'unknown')
-      };
-    }
-  }
-  if(Object.keys(result).length===0)return null;
-  if(!ST.sggDetail)ST.sggDetail={};
-  if(!ST.sggDetail[sgId])ST.sggDetail[sgId]={};
-  ST.sggDetail[sgId][sidoNm]=detail;
-
-  return result;
-}
-
+// 🌟 일반 개표 결과 + 무투표선거구 당선인 데이터 병합
 async function fetchAllSggAPI(sgId){
-  if(!ST.apiKey)return;
-  if(!D_SGG[sgId])D_SGG[sgId]={};
-
-  let done=0,success=0;
+  if(!ST.apiKey)return; if(!ST.D_SGG)ST.D_SGG={}; if(!ST.D_SGG[sgId])ST.D_SGG[sgId]={};
+  let success=0;
+  
+  // 1) 투표를 진행한 일반 지역 개표상황
   const tasks=SIDO_ALL.map(sidoNm=>async()=>{
     try{
-      const sggMap=await fetchSggBySido(sgId,sidoNm);
-      if(sggMap&&Object.keys(sggMap).length){
-        D_SGG[sgId][sidoNm]=sggMap;
-        success++;
-        if(ST.selectedSido===sidoNm){
-          preprocessSggColors(sgId); updateMapColors(); buildSggResultPanel(sidoNm);
+      let arr=null;
+      for(const sdName of (NEC_SIDO_NAMES[sidoNm]||[sidoNm])){
+        try{ const rows=await _necFetchAll(`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&sdName=${encodeURIComponent(sdName)}&numOfRows=100&resultType=json`); if(rows&&rows.length){ arr=rows; break; } }catch(e){}
+      }
+      if(!arr||!arr.length) return;
+      const result={}; const detail={};   
+      for(const row of arr){
+        const wiwName=String(row.wiwName||'').trim(); if(!wiwName)continue;
+        const yutusu=parseInt(row.yutusu||0)||parseInt(row.tusu||0)||1; const cands=[];
+        for(let i=1;i<=50;i++){
+          const x=String(i).padStart(2,'0'); const nm=String(row[`hbj${x}`]||'').trim(); const votes=parseInt(row[`dugsu${x}`]||0);
+          if(!nm&&!votes)break; if(!isNaN(votes)&&votes>=0) cands.push({name:nm,party:String(row[`jd${x}`]||'무소속').trim(), votes,pct:+(votes/yutusu*100).toFixed(1)});
         }
+        cands.sort((a,b)=>b.votes-a.votes);
+        if(cands.length){ result[wiwName]=cands[0].party; detail[wiwName]={winner:cands[0].party,cands}; }
+      }
+      if(Object.keys(result).length){
+        ST.D_SGG[sgId][sidoNm]=result;
+        if(!ST.sggDetail)ST.sggDetail={}; if(!ST.sggDetail[sgId])ST.sggDetail[sgId]={}; ST.sggDetail[sgId][sidoNm]=detail;
+        success++;
       }
     }catch(e){}
-    finally{done++;}
   });
+  let idx = 0; await Promise.all(Array.from({length: 5}, async () => { while (idx < tasks.length) await tasks[idx++](); }));
 
-  let idx = 0;
-  const workers = Array.from({length: 5}, async () => {
-      while (idx < tasks.length) await tasks[idx++]();
-  });
-  await Promise.all(workers);
-
-  if(success>0){
-    preprocessSggColors(sgId);
-    if(ST.selectedSido){ updateMapColors(); buildSggResultPanel(ST.selectedSido); }
-  }
-
-  // ★ 무투표 당선인 전용 API로 덮어쓰기
+  // 2) 🌟 무투표 당선인 API를 호출하여 데이터 누락 구역 채우기
   await fetchUncontestedSgg(sgId);
+
+  if(success>0 && ST.selectedSidoCd){ updateMapColors(); buildSggResultPanel(ST.selectedSidoNm); }
 }
 
-/**
- * 무투표선거구 당선인 API (WtvtelpcInfoInqireService)
- * 기초단체장(sgTypecode=4) 무투표 당선인을 가져와
- * D_SGG / ST.sggDetail의 해당 선거구를 'uncontested'로 마킹
- */
 async function fetchUncontestedSgg(sgId){
   if(!ST.apiKey)return;
   try{
-    // API가이드: getWtvtelpcsccnInfoInqire, sgTypecode=4(기초단체장), numOfRows 최대 100
+    const nameList = [...SIDO_ALL.flatMap(nm => NEC_SIDO_NAMES[nm]||[nm]), ''];
     const baseUrl = `https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/getWtvtelpcsccnInfoInqire`
-      + `?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=100&resultType=json`;
+      + `?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json`;
     const rows = await _necFetchAll(baseUrl);
     if(!rows||!rows.length) return;
 
     rows.forEach(row=>{
       const sdName  = String(row.sdName||'').trim();
-      const sggName = String(row.sggName||'').trim();  // API 응답 필드: sggName만 존재 (wiwName 없음)
+      const sggName = String(row.sggName||'').trim();
       const party   = String(row.jdName||'무소속').trim();
       const candName= String(row.name||'').trim();
 
-      // 시도명 정규화
       const sidoNm = SIDO_ALL.find(s=>{
         const aliases = NEC_SIDO_NAMES[s]||[s];
         return aliases.some(a=>sdName.includes(a)||a.includes(sdName));
@@ -1579,31 +1366,27 @@ async function fetchUncontestedSgg(sgId){
 
       if(!sidoNm)return;
 
-      // D_SGG 업데이트
-      if(!D_SGG[sgId])D_SGG[sgId]={};
-      if(!D_SGG[sgId][sidoNm])D_SGG[sgId][sidoNm]={};
+      const cleanSgg = sggName.replace(/[가-하]선거구$/, '').trim();
 
-      // sggName에서 선거구 접미사 제거: "예천군가선거구" → "예천군", "종로구" → "종로구"
-      const cleanSgg = sggName.replace(/[가나다라마바사]선거구$/, '').trim();
+      if(!ST.D_SGG[sgId])ST.D_SGG[sgId]={};
+      if(!ST.D_SGG[sgId][sidoNm])ST.D_SGG[sgId][sidoNm]={};
 
-      D_SGG[sgId][sidoNm][cleanSgg] = party;
+      ST.D_SGG[sgId][sidoNm][cleanSgg] = party;
 
-      // sggDetail 업데이트
       if(!ST.sggDetail)ST.sggDetail={};
       if(!ST.sggDetail[sgId])ST.sggDetail[sgId]={};
       if(!ST.sggDetail[sgId][sidoNm])ST.sggDetail[sgId][sidoNm]={};
 
       ST.sggDetail[sgId][sidoNm][cleanSgg] = {
         winner: party,
-        cands: [{name: candName, party, votes: 0, pct: 0}],
+        cands: [{name: candName, party, votes: 0, pct: 100}],
         rate: 100,
         status: 'uncontested'
       };
     });
 
-    // 갱신
     preprocessSggColors(sgId);
-    if(ST.selectedSido){ updateMapColors(); buildSggResultPanel(ST.selectedSido); }
+    if(ST.selectedSidoCd){ updateMapColors(); buildSggResultPanel(ST.selectedSidoNm); }
 
   }catch(e){
     console.warn('[무투표 API]', e);
@@ -1613,44 +1396,25 @@ async function fetchUncontestedSgg(sgId){
 // ════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════
-async function openSettings(){
-  ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
-  ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
-  ST.apiKey=localStorage.getItem('el_apikey')||'';
-  ST.proxyUrl=localStorage.getItem('el_proxy')||'';
-  document.getElementById('in-sgis-key').value=ST.sgisKey;
-  document.getElementById('in-sgis-sec').value=ST.sgisSecret;
-  document.getElementById('in-proxy').value=ST.proxyUrl;
-  document.getElementById('in-apikey').value=ST.apiKey;
-  setMode(ST.mode,false);setPoll(ST.pollSec,false);
-  
-  const targetYear = curEl().year;
-  const c = await loadGeoFromCache(targetYear);
-  document.getElementById('cache-st').textContent = c?.ts 
-    ? `데이터베이스 캐시: ${targetYear}년 지도(${Math.round((Date.now()-c.ts)/3600000)}시간 전)`
-    : `${targetYear}년 캐시 없음 (SGIS 지도 갱신 필요)`;
-    
-  document.getElementById('settings-overlay').classList.add('on');
+function openSettings(){
+  ST.sgisKey=localStorage.getItem('el_sgis_key')||''; ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
+  ST.apiKey=localStorage.getItem('el_apikey')||''; ST.proxyUrl=localStorage.getItem('el_proxy')||'';
+  document.getElementById('in-sgis-key').value=ST.sgisKey; document.getElementById('in-sgis-sec').value=ST.sgisSecret;
+  document.getElementById('in-proxy').value=ST.proxyUrl; document.getElementById('in-apikey').value=ST.apiKey;
+  setMode(ST.mode,false);setPoll(ST.pollSec,false); document.getElementById('settings-overlay').classList.add('on');
 }
 function closeSettings(){document.getElementById('settings-overlay').classList.remove('on');}
 function saveSettings(){
-  const sk=document.getElementById('in-sgis-key').value.trim();
-  const ss=document.getElementById('in-sgis-sec').value.trim();
-  const proxy=document.getElementById('in-proxy').value.trim();
-  const ak=document.getElementById('in-apikey').value.trim();
-  if(sk){ST.sgisKey=sk;localStorage.setItem('el_sgis_key',sk);}
-  if(ss){ST.sgisSecret=ss;localStorage.setItem('el_sgis_secret',ss);}
-  if(proxy){ST.proxyUrl=proxy;localStorage.setItem('el_proxy',proxy);}
-  if(ak){ST.apiKey=ak;localStorage.setItem('el_apikey',ak);}
+  const sk=document.getElementById('in-sgis-key').value.trim(); const ss=document.getElementById('in-sgis-sec').value.trim();
+  const proxy=document.getElementById('in-proxy').value.trim(); const ak=document.getElementById('in-apikey').value.trim();
+  if(sk)localStorage.setItem('el_sgis_key',sk); if(ss)localStorage.setItem('el_sgis_secret',ss);
+  if(proxy)localStorage.setItem('el_proxy',proxy); if(ak)localStorage.setItem('el_apikey',ak);
+  ST.sgisKey=sk; ST.sgisSecret=ss; ST.proxyUrl=proxy; ST.apiKey=ak;
   localStorage.setItem('el_mode',ST.mode);localStorage.setItem('el_poll',ST.pollSec);
   updateHeader();closeSettings();
 }
 function setMode(m,save=true){ST.mode=m;document.getElementById('mode-mock').classList.toggle('active',m==='mock');document.getElementById('mode-real').classList.toggle('active',m==='real');document.getElementById('real-s').style.display=m==='real'?'block':'none';}
-function setPoll(s){
-  ST.pollSec=s;
-  [10,30,60].forEach(n=>document.getElementById(`poll-${n}`)?.classList.toggle('active',n===s));
-  if(ST.isLive){stopPolling();ST.pollTimer=setInterval(poll,ST.pollSec*1000);}
-}
+function setPoll(s){ ST.pollSec=s; [10,30,60].forEach(n=>document.getElementById(`poll-${n}`)?.classList.toggle('active',n===s)); if(ST.isLive){stopPolling();ST.pollTimer=setInterval(poll,ST.pollSec*1000);} }
 
 // ════════════════════════════════════════════
 //  INIT
@@ -1658,18 +1422,12 @@ function setPoll(s){
 setInterval(()=>{document.getElementById('time-str').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
 
 let _resizeTimer=null;
-window.addEventListener('resize',()=>{
-  clearTimeout(_resizeTimer);
-  _resizeTimer=setTimeout(()=>{if(ST.geoLoaded)resizeMap();},200);
-});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ST.selectedSido)drillUp();});
+window.addEventListener('resize',()=>{ clearTimeout(_resizeTimer); _resizeTimer=setTimeout(()=>{if(ST.geoLoaded)resizeMap();},200); });
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ST.selectedSidoCd)drillUp();});
 
-ST.apiKey=localStorage.getItem('el_apikey')||'';
-ST.proxyUrl=localStorage.getItem('el_proxy')||'';
-ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
-ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
-ST.mode=localStorage.getItem('el_mode')||'mock';
-ST.pollSec=parseInt(localStorage.getItem('el_poll')||'30');
+ST.apiKey=localStorage.getItem('el_apikey')||''; ST.proxyUrl=localStorage.getItem('el_proxy')||'';
+ST.sgisKey=localStorage.getItem('el_sgis_key')||''; ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
+ST.mode=localStorage.getItem('el_mode')||'mock'; ST.pollSec=parseInt(localStorage.getItem('el_poll')||'30');
 
 renderTabs();updateHeader();
 loadGeo(curEl().year);
