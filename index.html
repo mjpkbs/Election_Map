@@ -442,6 +442,7 @@ function findUncontested(sgId, sidoNm, featureNm){
 }
 
 function getSggDetail(sidoName, sggRawName, props){
+  // 1. sggDetail에서 canonical key로 조회
   const detailTbl=ST.sggDetail?.[ST.currentSgId]?.[sidoName]||null;
   if(detailTbl){
     const key=canonicalSggKey(sidoName,sggRawName,props);
@@ -452,7 +453,7 @@ function getSggDetail(sidoName, sggRawName, props){
       if(strip(k)===target)return v;
     }
   }
-  // 무투표 전용 저장소에서 직접 조회
+  // 2. D_UNCONTESTED에서 직접 조회 (이름 매칭 없이 bare 비교)
   const unc=findUncontested(ST.currentSgId,sidoName,sggRawName);
   if(unc)return{winner:unc.party,cands:[{name:unc.candName,party:unc.party,votes:0,pct:100}],rate:100,status:'uncontested'};
   return null;
@@ -1082,34 +1083,59 @@ function changeStrokeWidth(val) {
 
 function buildSggResultPanel(sidoName){
   const sgId=ST.currentSgId;
-  const sggData=D_SGG[sgId]?.[sidoName]||null;
-  const hasFallback=!sggData&&D_SGG['20220601']?.[sidoName];
   const noSgg=NO_SGG.includes(sidoName);
   const listEl=document.getElementById('sido-list');
   if(noSgg){
     listEl.innerHTML='<div style="padding:10px 8px;font-size:11px;color:var(--dim)">기초단체장 선거 없음</div>';return;
   }
+
+  const sggData=D_SGG[sgId]?.[sidoName]||null;
+  const uncList=D_UNCONTESTED[sgId]?.[sidoName]||[];
+
+  // sggName 표시용: "안산시장" → "안산", "예천군수" → "예천" 등 직위 제거
+  const displaySggName = s => String(s||'')
+    .replace(/시장$|군수$|구청장$|교육감$/,'')
+    .replace(/선거구$/,'')
+    .trim();
+
+  // ── 무투표만 있는 경우 (D_SGG 없음) ──
+  if(!sggData && uncList.length){
+    const shortNm=sidoName.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
+    const counts={};
+    uncList.forEach(u=>{counts[u.party]=(counts[u.party]||0)+1;});
+    let html=`<div id="list-hdr" style="font-size:11px;color:var(--dim);font-weight:600;padding:4px 8px 5px">기초단체장 · ${shortNm}</div>`;
+    html+=`<div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 8px 8px">`;
+    Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([p,n])=>{
+      html+=`<span style="font-size:11px;padding:2px 7px;border-radius:3px;font-weight:700;background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}</span>`;
+    });
+    html+=`</div>`;
+    uncList.forEach(u=>{
+      const nm=displaySggName(u.sggName);
+      html+=`<div class="srow" style="cursor:default">
+        <div class="sdot" style="background:${pc(u.party)}"></div>
+        <div class="sname">${nm}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="sparty" style="color:${pc(u.party)}">${ps(u.party)}</span>
+            <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span>
+          </div>
+          ${u.candName?`<div style="font-size:10px;color:var(--sub);margin-top:1px">${u.candName}</div>`:''}
+        </div>
+      </div>`;
+    });
+    listEl.innerHTML=html;
+    return;
+  }
+
+  // ── 일반 개표 데이터 없는 경우 ──
   if(!sggData){
-    const uncList=D_UNCONTESTED[sgId]?.[sidoName]||[];
-    // 무투표 데이터만 있는 경우: D_SGG 없어도 패널 표시
-    if(uncList.length){
-      const normData={};
-      const normDetail={};
-      for(const unc of uncList){
-        const key=canonicalSggKey(sidoName,unc.sggName)||unc.sggName;
-        normData[key]=unc.party;
-        normDetail[key]={winner:unc.party,cands:[{name:unc.candName,party:unc.party,votes:0,pct:100}],rate:100,status:'uncontested'};
-      }
-      _renderSggPanel(listEl,sidoName,normData,normDetail);
-      return;
-    }
+    const hasFallback=D_SGG['20220601']?.[sidoName];
     const yr=ELECTIONS.find(e=>e.sgId===sgId)?.year||sgId;
     const loadingMsg=ST.apiKey?`⏳ ${yr}년 시군구 결과 로딩 중...`:`${yr}년 기초단체장 데이터 없음`;
     listEl.innerHTML=`<div style="padding:10px 8px;font-size:11px;color:var(--dim)">${loadingMsg}<br><span style="color:${hasFallback?'#6a9af5':'var(--dim)'}">${hasFallback?'광역단체장 기준으로 색상 표시됨':'(광역단체장 기준 색상)'}</span></div>`;return;
   }
 
-
-  // 같은 canonical key로 정규화해 중복 항목 병합 (더 확정적인 데이터 우선)
+  // ── 정규 개표 데이터 있는 경우 ──
   const normData={};
   const normDetail={};
   const score=s=>s==='uncontested'?4:s==='final'?3:s==='counting'?2:1;
@@ -1122,15 +1148,14 @@ function buildSggResultPanel(sidoName){
       normDetail[key]=det;
     }
   }
-  // 무투표 전용 저장소에서 아직 패널에 없는 항목 추가
-  const uncList=D_UNCONTESTED[sgId]?.[sidoName]||[];
-  for(const unc of uncList){
-    const key=canonicalSggKey(sidoName,unc.sggName)||unc.sggName;
-    if(!normData[key]||score(normDetail[key]?.status)<4){
-      normData[key]=unc.party;
-      normDetail[key]={winner:unc.party,cands:[{name:unc.candName,party:unc.party,votes:0,pct:100}],rate:100,status:'uncontested'};
+  // 무투표 항목을 정규 데이터에 없는 경우 직접 추가 (이름 매칭 없이 raw 표시)
+  uncList.forEach(u=>{
+    const nm=displaySggName(u.sggName);
+    if(!normData[nm]){
+      normData[nm]=u.party;
+      normDetail[nm]={winner:u.party,cands:[{name:u.candName,party:u.party,votes:0,pct:100}],rate:100,status:'uncontested'};
     }
-  }
+  });
   _renderSggPanel(listEl,sidoName,normData,normDetail);
 }
 
@@ -1703,8 +1728,8 @@ async function fetchUncontestedSgg(sgId){
   try{
     // 당선인 결정 후 API 먼저, 없으면 후보자(결정 전) API fallback
     const ENDPOINTS=[
-      'getWtvtelpcsccnInfoInqire',  // 당선인 결정 후
-      'getWtvtelpccndaInfoInqire',  // 후보자 (결정 전)
+      'getWtvtelpcsccnInfoInqire',
+      'getWtvtelpccndaInfoInqire',
     ];
     let rows=null;
     for(const ep of ENDPOINTS){
@@ -1717,60 +1742,30 @@ async function fetchUncontestedSgg(sgId){
     }
     if(!rows||!rows.length) return;
 
+    if(!D_UNCONTESTED[sgId])D_UNCONTESTED[sgId]={};
+
     rows.forEach(row=>{
       const sdName  = String(row.sdName||'').trim();
-      const sggName = String(row.sggName||'').trim();  // API 응답 필드: sggName만 존재 (wiwName 없음)
+      const sggName = String(row.sggName||'').trim();
       const party   = String(row.jdName||'무소속').trim();
       const candName= String(row.name||'').trim();
+      if(!sggName||!party)return;
 
-      // 시도명 정규화
       const sidoNm = SIDO_ALL.find(s=>{
         const aliases = NEC_SIDO_NAMES[s]||[s];
         return aliases.some(a=>sdName.includes(a)||a.includes(sdName));
       }) || sdName;
-
       if(!sidoNm)return;
 
-      // ★ 무투표 전용 raw 저장소에 원본 그대로 저장 (느슨한 매칭용)
-      if(!D_UNCONTESTED[sgId])D_UNCONTESTED[sgId]={};
       if(!D_UNCONTESTED[sgId][sidoNm])D_UNCONTESTED[sgId][sidoNm]=[];
-      // 중복 방지
       if(!D_UNCONTESTED[sgId][sidoNm].some(e=>e.sggName===sggName)){
-        D_UNCONTESTED[sgId][sidoNm].push({sggName,party,candName});
+        D_UNCONTESTED[sgId][sidoNm].push({sggName, party, candName});
       }
-
-      // D_SGG 업데이트
-      if(!D_SGG[sgId])D_SGG[sgId]={};
-      if(!D_SGG[sgId][sidoNm])D_SGG[sgId][sidoNm]={};
-
-      // canonical key로 정규화 — fetchSggBySido와 동일 규칙 사용
-      const rawSgg=sggName.replace(/[가나다라마바사]선거구$/,'').trim();
-      const cleanSgg=canonicalSggKey(sidoNm,rawSgg)||rawSgg;
-
-      // 기존에 같은 canonical key로 저장된 항목이 있으면 그 key 우선 사용
-      const strip=s=>String(s||'').replace(/\s+/g,'').replace(/[시구군읍면동리]$/,'');
-      const existingKey=Object.keys(D_SGG[sgId][sidoNm]).find(k=>
-        k===cleanSgg||strip(k)===strip(cleanSgg)
-      )||cleanSgg;
-
-      D_SGG[sgId][sidoNm][existingKey]=party;
-
-      // sggDetail 업데이트
-      if(!ST.sggDetail)ST.sggDetail={};
-      if(!ST.sggDetail[sgId])ST.sggDetail[sgId]={};
-      if(!ST.sggDetail[sgId][sidoNm])ST.sggDetail[sgId][sidoNm]={};
-
-      ST.sggDetail[sgId][sidoNm][existingKey]={
-        winner: party,
-        cands: [{name: candName, party, votes: 0, pct: 100}],
-        rate: 100,
-        status: 'uncontested'
-      };
     });
 
-    // 갱신
     preprocessSggColors(sgId);
-    if(ST.selectedSido){ updateMapColors(); buildSggResultPanel(ST.selectedSido); }
+    updateMapColors();
+    if(ST.selectedSido) buildSggResultPanel(ST.selectedSido);
 
   }catch(e){
     console.warn('[무투표 API]', e);
