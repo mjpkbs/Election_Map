@@ -542,8 +542,8 @@ function normGeo(geo){
         if(admParts.length >= 2){
           const parent = admParts[admParts.length - 2];
           const child  = admParts[admParts.length - 1];
-          if(/[구읍면]$/.test(child) && /[시군]$/.test(parent)){
-            _parentCity = parent; // "안산시", "수원시", "성남시" 등
+          if(/[구읍면]$/.test(child) && /[시군]$/.test(parent) && !/특별|광역/.test(parent)){
+            _parentCity = parent; // "안산시", "수원시", "성남시" 등 (서울특별시, 부산광역시 등 제외)
             if(_sidoName && isMergedCity(_sidoName, parent)) _mergedCity = parent;
           }
         }
@@ -809,10 +809,20 @@ function initMapLayers(){
         d3.select(this).attr('opacity',0.75); 
         const rawNm=String(d.properties.name||d.properties.adm_nm||d.properties.SIGUNGU_NM||'').trim()||extractSggName(d.properties);
         const party=d.properties._sggParty||getSggParty(sidoName,rawNm,ST.currentSgId,d.properties)||null;
-        // 툴팁 지명: "상록구" 단독보다 "안산시 상록구"처럼 상위 시 포함이 더 명확
-        const dispNm = d.properties._parentCity
-          ? `${d.properties._parentCity.replace(/시$|군$/,'')} ${rawNm.split(/\s+/).pop()}`
-          : rawNm;
+        // 툴팁 지명: 항상 마지막 행정구역 단위만 표시 ("서울특별시 종로구" → "종로구", "안산시 상록구" → "안산 상록구")
+        let dispNm;
+        if(d.properties._mergedCity){
+          // 통합시 구: "안산 상록구" 형태
+          const lastPart=rawNm.split(/\s+/).pop()||rawNm;
+          dispNm=`${d.properties._mergedCity.replace(/시$|군$/,'')} ${lastPart}`;
+        }else if(d.properties._parentCity){
+          // 일반 상위시 구: "진주 수곡면" 형태
+          const lastPart=rawNm.split(/\s+/).pop()||rawNm;
+          dispNm=`${d.properties._parentCity.replace(/시$|군$/,'')} ${lastPart}`;
+        }else{
+          // 광역시/특별시 구, 독립 시/군: 마지막 단어만
+          dispNm=rawNm.split(/\s+/).pop()||rawNm;
+        }
         showSggTooltip(ev,dispNm,party,sidoName,d.properties);
       } else {
         d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity', ST.bgOpacity + 0.2);
@@ -1648,12 +1658,20 @@ async function fetchAllSggAPI(sgId){
 async function fetchUncontestedSgg(sgId){
   if(!ST.apiKey)return;
   try{
-    const nameList = [...SIDO_ALL.flatMap(nm => NEC_SIDO_NAMES[nm]||[nm]), ''];
-    // 시도명 없이 전체 한 번에 요청 (sdName 생략)
-    // ★ API 가이드 기준 정확한 서비스명: WtvtelpcInfoInqireService
-    const baseUrl = `https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/getWtvtelpcsccnInfoInqire`
-      + `?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json`;
-    const rows = await _necFetchAll(baseUrl);
+    // 당선인 결정 후 API 먼저, 없으면 후보자(결정 전) API fallback
+    const ENDPOINTS=[
+      'getWtvtelpcsccnInfoInqire',  // 당선인 결정 후
+      'getWtvtelpccndaInfoInqire',  // 후보자 (결정 전)
+    ];
+    let rows=null;
+    for(const ep of ENDPOINTS){
+      const baseUrl=`https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/${ep}`
+        +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json`;
+      try{
+        const r=await _necFetchAll(baseUrl);
+        if(r&&r.length){rows=r;break;}
+      }catch(e){}
+    }
     if(!rows||!rows.length) return;
 
     rows.forEach(row=>{
