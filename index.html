@@ -420,15 +420,25 @@ function getSggParty(sidoName,sggRawName,sgId,props){
 function findUncontested(sgId, sidoNm, featureNm){
   const list=D_UNCONTESTED[sgId]?.[sidoNm];
   if(!list||!featureNm)return null;
-  const bare=s=>String(s||'').replace(/\s+/g,'')
-    .replace(/시장$|군수$|구청장$/,'')   // 직위 제거
-    .replace(/시$|군$|구$|읍$|면$/,'');  // 행정단위 제거
-  const target=bare(featureNm);
-  if(!target)return null;
-  return list.find(e=>{
-    const b=bare(e.sggName);
-    return b&&(b===target||b.includes(target)||target.includes(b));
-  })||null;
+
+  // 행정단위·직위 접미사를 제거한 bare 이름 추출
+  // "안산시장" → "안산", "안산시 상록구" → ["안산", "상록"]
+  const stripAll = s => String(s||'').replace(/\s+/g,'')
+    .replace(/시장$|군수$|구청장$|교육감$/,'')
+    .replace(/특별시$|광역시$|특별자치시$|특별자치도$|도$/,'')
+    .replace(/시$|군$|구$|읍$|면$|동$|리$/,'');
+
+  // feature 이름에서 비교 후보군 생성: 각 단어별로 stripped 이름 만들기
+  const featureParts = featureNm.trim().split(/\s+/).map(stripAll).filter(Boolean);
+
+  return list.find(e => {
+    const ebare = stripAll(e.sggName);
+    if(!ebare) return false;
+    // 하나라도 일치하거나 포함 관계면 매칭
+    return featureParts.some(fp =>
+      fp === ebare || fp.includes(ebare) || ebare.includes(fp)
+    );
+  }) || null;
 }
 
 function getSggDetail(sidoName, sggRawName, props){
@@ -726,7 +736,21 @@ function rebuildMap() {
   d3.select('#map-svg').selectAll('*').remove();
   d3.select('#map-svg').on('.zoom', null);
   ST.currentTransform = d3.zoomIdentity;
-  
+
+  // 광역시·특별시가 도 province 위에 그려져야 hole을 채울 수 있음
+  // 도(道) 먼저, 시(市/자치시/광역시) 나중에 렌더
+  if(ST.sidoGeo){
+    const isMetroCity = f => {
+      const nm = String(f.properties.name||f.properties.adm_nm||'');
+      return /광역시|특별시|특별자치시/.test(nm);
+    };
+    const sorted = [
+      ...ST.sidoGeo.features.filter(f => !isMetroCity(f)),
+      ...ST.sidoGeo.features.filter(f =>  isMetroCity(f)),
+    ];
+    ST.sidoGeo = {...ST.sidoGeo, features: sorted};
+  }
+
   if (ST.sigunguGeo) preprocessSggColors(ST.currentSgId);
   initMapLayers();
   renderList();
