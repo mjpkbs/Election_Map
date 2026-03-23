@@ -15,7 +15,7 @@ export default {
     try { targetUrl = new URL(target); }
     catch { return json({ error: '잘못된 URL' }, 400); }
 
-    // 허용 도메인 명시: 한국 공공 API (.go.kr) 전체 허용
+    // 허용: 한국 공공 API (.go.kr) + SGIS (.mods.go.kr 포함)
     if (!targetUrl.hostname.endsWith('.go.kr')) {
       return json({ error: `허용되지 않은 도메인: ${targetUrl.hostname}` }, 403);
     }
@@ -23,7 +23,10 @@ export default {
     try {
       const res = await fetch(target, {
         method: 'GET',
-        headers: { 'Accept': 'application/json, application/xml, */*' },
+        headers: {
+          'Accept': 'application/json, application/xml, */*',
+          'User-Agent': 'ElectionMapProxy/1.0',
+        },
       });
       const body = await res.arrayBuffer();
       const ct = res.headers.get('Content-Type') || 'application/json';

@@ -1484,7 +1484,18 @@ const NEC_SIDO_NAMES={
 };
 
 async function _necFetch(necUrl){
-  const url=ST.proxyUrl ? ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}` : necUrl;
+  // 1차: 직접 호출 시도 (Windows/Mac 모두 가능한 경우)
+  try{
+    const r=await fetch(necUrl,{headers:{'Accept':'application/json'}});
+    if(r.ok){
+      const j=await r.json();
+      const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+      return Array.isArray(items)?items:(items?[items]:null);
+    }
+  }catch(e){}
+  // 2차: 프록시 경유
+  if(!ST.proxyUrl) throw new Error('프록시 미설정');
+  const url=ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`;
   const r=await fetch(url);
   if(!r.ok)throw new Error(`HTTP ${r.status}`);
   const j=await r.json();
@@ -1494,46 +1505,35 @@ async function _necFetch(necUrl){
 
 // 직접 호출 우선, 실패 시 프록시 fallback (무투표 API 전용)
 async function _necFetchDirect(necUrl){
-  // 1차: 직접 호출 (프록시 완전 우회)
-  console.log('[무투표 직접호출]', necUrl);
-  try{
-    const r=await fetch(necUrl,{headers:{'Accept':'application/json'}});
-    console.log('[무투표 직접호출 응답]', r.status, r.headers.get('Content-Type'));
-    if(r.ok){
-      const text=await r.text();
-      console.log('[무투표 직접호출 body 앞200자]', text.slice(0,200));
-      let j;
-      try{ j=JSON.parse(text); }catch(e){ console.warn('[무투표] JSON 파싱 실패 (XML?)', text.slice(0,100)); return null; }
-      const items=j?.response?.body?.items?.item??j?.body?.items?.item;
-      console.log('[무투표 직접호출 items]', Array.isArray(items)?items.length:items);
-      return Array.isArray(items)?items:(items?[items]:null);
-    }
-    console.warn('[무투표 직접호출 실패]', r.status);
-  }catch(e){
-    console.warn('[무투표 직접호출 예외]', e.message);
-  }
-  // 2차: 프록시 경유
+  // apis.data.go.kr는 http:// 서비스 → HTTPS 페이지에서 직접 호출 불가(mixed content)
+  // 프록시가 있으면 무조건 프록시 경유, 없으면 직접 시도
   if(ST.proxyUrl){
     const url=ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`;
     console.log('[무투표 프록시호출]', url);
-    try{
-      const r=await fetch(url);
-      console.log('[무투표 프록시 응답]', r.status);
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const text=await r.text();
-      console.log('[무투표 프록시 body 앞200자]', text.slice(0,200));
-      let j;
-      try{ j=JSON.parse(text); }catch(e){ console.warn('[무투표] 프록시 JSON 파싱 실패', text.slice(0,100)); return null; }
-      const items=j?.response?.body?.items?.item??j?.body?.items?.item;
-      console.log('[무투표 프록시 items]', Array.isArray(items)?items.length:items);
-      return Array.isArray(items)?items:(items?[items]:null);
-    }catch(e){
-      console.warn('[무투표 프록시 예외]', e.message);
+    const r=await fetch(url);
+    console.log('[무투표 프록시 응답]', r.status);
+    if(!r.ok) throw new Error(`프록시 HTTP ${r.status}`);
+    const text=await r.text();
+    console.log('[무투표 body 앞150자]', text.slice(0,150));
+    let j;
+    try{ j=JSON.parse(text); }catch(e){
+      console.warn('[무투표] JSON 파싱 실패, body:', text.slice(0,200));
+      throw new Error('JSON 파싱 실패');
     }
-  } else {
-    console.warn('[무투표] 프록시 미설정, 직접호출만 시도됨');
+    const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+    console.log('[무투표 items]', Array.isArray(items)?items.length+'건':items);
+    return Array.isArray(items)?items:(items?[items]:null);
   }
-  return null;
+  // 프록시 없는 경우 직접 시도 (로컬 개발환경 등)
+  console.log('[무투표 직접호출]', necUrl);
+  const r=await fetch(necUrl,{headers:{'Accept':'application/json'}});
+  console.log('[무투표 직접호출 응답]', r.status);
+  if(!r.ok) throw new Error(`직접 HTTP ${r.status}`);
+  const text=await r.text();
+  let j;
+  try{ j=JSON.parse(text); }catch(e){ throw new Error('JSON 파싱 실패'); }
+  const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+  return Array.isArray(items)?items:(items?[items]:null);
 }
 
 async function fetchOneSido(sgId,nm){
