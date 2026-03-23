@@ -1,6 +1,5 @@
 export default {
   async fetch(request) {
-    // CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors() });
     }
@@ -12,14 +11,11 @@ export default {
       return json({ error: 'url 파라미터 없음' }, 400);
     }
 
-    // 한국 정부 도메인만 허용 (.go.kr)
     let targetUrl;
-    try {
-      targetUrl = new URL(target);
-    } catch {
-      return json({ error: '잘못된 URL' }, 400);
-    }
+    try { targetUrl = new URL(target); }
+    catch { return json({ error: '잘못된 URL' }, 400); }
 
+    // 허용 도메인 명시: 한국 공공 API (.go.kr) 전체 허용
     if (!targetUrl.hostname.endsWith('.go.kr')) {
       return json({ error: `허용되지 않은 도메인: ${targetUrl.hostname}` }, 403);
     }
@@ -29,10 +25,8 @@ export default {
         method: 'GET',
         headers: { 'Accept': 'application/json, application/xml, */*' },
       });
-
       const body = await res.arrayBuffer();
       const ct = res.headers.get('Content-Type') || 'application/json';
-
       return new Response(body, {
         status: res.status,
         headers: { 'Content-Type': ct, ...cors() },
