@@ -1090,10 +1090,24 @@ function buildSggResultPanel(sidoName){
     listEl.innerHTML='<div style="padding:10px 8px;font-size:11px;color:var(--dim)">기초단체장 선거 없음</div>';return;
   }
   if(!sggData){
+    const uncList=D_UNCONTESTED[sgId]?.[sidoName]||[];
+    // 무투표 데이터만 있는 경우: D_SGG 없어도 패널 표시
+    if(uncList.length){
+      const normData={};
+      const normDetail={};
+      for(const unc of uncList){
+        const key=canonicalSggKey(sidoName,unc.sggName)||unc.sggName;
+        normData[key]=unc.party;
+        normDetail[key]={winner:unc.party,cands:[{name:unc.candName,party:unc.party,votes:0,pct:100}],rate:100,status:'uncontested'};
+      }
+      _renderSggPanel(listEl,sidoName,normData,normDetail);
+      return;
+    }
     const yr=ELECTIONS.find(e=>e.sgId===sgId)?.year||sgId;
     const loadingMsg=ST.apiKey?`⏳ ${yr}년 시군구 결과 로딩 중...`:`${yr}년 기초단체장 데이터 없음`;
     listEl.innerHTML=`<div style="padding:10px 8px;font-size:11px;color:var(--dim)">${loadingMsg}<br><span style="color:${hasFallback?'#6a9af5':'var(--dim)'}">${hasFallback?'광역단체장 기준으로 색상 표시됨':'(광역단체장 기준 색상)'}</span></div>`;return;
   }
+
 
   // 같은 canonical key로 정규화해 중복 항목 병합 (더 확정적인 데이터 우선)
   const normData={};
@@ -1112,11 +1126,15 @@ function buildSggResultPanel(sidoName){
   const uncList=D_UNCONTESTED[sgId]?.[sidoName]||[];
   for(const unc of uncList){
     const key=canonicalSggKey(sidoName,unc.sggName)||unc.sggName;
-    if(!normData[key]){
+    if(!normData[key]||score(normDetail[key]?.status)<4){
       normData[key]=unc.party;
       normDetail[key]={winner:unc.party,cands:[{name:unc.candName,party:unc.party,votes:0,pct:100}],rate:100,status:'uncontested'};
     }
   }
+  _renderSggPanel(listEl,sidoName,normData,normDetail);
+}
+
+function _renderSggPanel(listEl,sidoName,normData,normDetail){
   const counts={};
   Object.entries(normData).forEach(([,p])=>{counts[p]=(counts[p]||0)+1;});
   const shortNm=sidoName.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
@@ -1133,7 +1151,8 @@ function buildSggResultPanel(sidoName){
     const statusBadge = isUncontested
       ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span>`
       : (top ? `<span style="font-size:10px;color:var(--dim)">${top.pct}%</span>` : '');
-    const candName = (!isUncontested && top) ? top.name : '';
+    // 무투표: 후보자 이름도 표시
+    const candName = isUncontested ? (top?.name||'') : (top ? top.name : '');
     html+=`<div class="srow" style="cursor:default">
       <div class="sdot" style="background:${pc(party)}"></div>
       <div class="sname">${nm}</div>
