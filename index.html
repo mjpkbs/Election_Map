@@ -239,7 +239,8 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
         <button class="tbtn" id="mode-real" onclick="setMode('real')">🌐 선관위 API</button>
       </div></div>
     <div id="real-s" style="display:none">
-      <div class="m-group"><label class="m-lbl">공공데이터 API Key</label><input class="m-input" type="password" id="in-apikey" placeholder="투개표정보 API 키"></div>
+      <div class="m-group"><label class="m-lbl">공공데이터 API Key (투·개표)</label><input class="m-input" type="password" id="in-apikey" placeholder="투개표정보 API 키"></div>
+      <div class="m-group"><label class="m-lbl">공공데이터 API Key (무투표)</label><input class="m-input" type="password" id="in-apikey-unc" placeholder="무투표선거구 정보 API 키 (별도 신청)"></div>
     </div>
     <div class="m-group"><label class="m-lbl">SGIS 지도 연동</label>
       <input class="m-input" type="text" id="in-sgis-key" placeholder="SGIS Consumer Key" style="margin-bottom:5px">
@@ -312,6 +313,7 @@ const ELECTIONS=[{sgId:'20260603',round:'제9회',year:2026,date:'2026.06.03',st
 
 const D_SIDO={};   
 const D_SGG={};    
+const D_UNCONTESTED={};  // sgId → sidoNm → [{sggName, party, candName}]  무투표 전용 raw 저장소
 
 const SIDO_ALL=['서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시','세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도','경상북도','경상남도','제주특별자치도'];
 const SIDO_CODE={'서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28','광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36','경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44','전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50'};
@@ -414,16 +416,47 @@ function getSggParty(sidoName,sggRawName,sgId,props){
   return null;
 }
 
+// 무투표 데이터를 feature 이름과 느슨하게 매칭
+// API sggName "안산시장" ↔ geo feature "안산시 상록구" 같은 케이스를 처리
+function findUncontested(sgId, sidoNm, featureNm){
+  const list=D_UNCONTESTED[sgId]?.[sidoNm];
+  if(!list||!featureNm)return null;
+
+  // 행정단위·직위 접미사를 제거한 bare 이름 추출
+  // "안산시장" → "안산", "안산시 상록구" → ["안산", "상록"]
+  const stripAll = s => String(s||'').replace(/\s+/g,'')
+    .replace(/시장$|군수$|구청장$|교육감$/,'')
+    .replace(/특별시$|광역시$|특별자치시$|특별자치도$|도$/,'')
+    .replace(/시$|군$|구$|읍$|면$|동$|리$/,'');
+
+  // feature 이름에서 비교 후보군 생성: 각 단어별로 stripped 이름 만들기
+  const featureParts = featureNm.trim().split(/\s+/).map(stripAll).filter(Boolean);
+
+  return list.find(e => {
+    const ebare = stripAll(e.sggName);
+    if(!ebare) return false;
+    // 하나라도 일치하거나 포함 관계면 매칭
+    return featureParts.some(fp =>
+      fp === ebare || fp.includes(ebare) || ebare.includes(fp)
+    );
+  }) || null;
+}
+
 function getSggDetail(sidoName, sggRawName, props){
+  // 1. sggDetail에서 canonical key로 조회
   const detailTbl=ST.sggDetail?.[ST.currentSgId]?.[sidoName]||null;
-  if(!detailTbl)return null;
-  const key=canonicalSggKey(sidoName,sggRawName,props);
-  if(key&&detailTbl[key])return detailTbl[key];
-  const strip=s=>String(s||'').replace(/\s+/g,'').replace(/[시구군읍면동리]$/,'');
-  const target=strip(key||sggRawName);
-  for(const [k,v] of Object.entries(detailTbl)){
-    if(strip(k)===target)return v;
+  if(detailTbl){
+    const key=canonicalSggKey(sidoName,sggRawName,props);
+    if(key&&detailTbl[key])return detailTbl[key];
+    const strip=s=>String(s||'').replace(/\s+/g,'').replace(/[시구군읍면동리]$/,'');
+    const target=strip(key||sggRawName);
+    for(const [k,v] of Object.entries(detailTbl)){
+      if(strip(k)===target)return v;
+    }
   }
+  // 2. D_UNCONTESTED에서 직접 조회 (이름 매칭 없이 bare 비교)
+  const unc=findUncontested(ST.currentSgId,sidoName,sggRawName);
+  if(unc)return{winner:unc.party,cands:[{name:unc.candName,party:unc.party,votes:0,pct:100}],rate:100,status:'uncontested'};
   return null;
 }
 
@@ -461,6 +494,11 @@ function preprocessSggColors(sgId){
         }
       }
     }
+    // 무투표 전용 저장소에서 직접 매칭 (canonical key 실패 시 최종 fallback)
+    if(!party&&sidoName){
+      const unc=findUncontested(sgId,sidoName,rawNm);
+      if(unc)party=unc.party;
+    }
     p._sidoName=sidoName;
     p._sggParty=party;
     p._sggColor=party?pc(party):(sidoName&&ST.data[sidoName]?pc(ST.data[sidoName].winner)+'cc':'#1a2030');
@@ -473,8 +511,8 @@ let ST={
   data:{}, sggDetail:{},  
   dataSource:'mock', showLabels:true, selectedSido:null,
   bgOpacity:0.3,
-  sidoStrokeWidth: 0.5, // 굵기를 0.8 -> 0.5로 디폴트 하향 (세련되게)
-  mode:'mock',apiKey:'',proxyUrl:'',sgisKey:'',sgisSecret:'',pollSec:30,isLive:false,pollTimer:null,
+  sidoStrokeWidth: 0.5,
+  mode:'mock',apiKey:'',uncApiKey:'',proxyUrl:'',sgisKey:'',sgisSecret:'',pollSec:30,isLive:false,pollTimer:null,
 };
 const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
@@ -516,8 +554,8 @@ function normGeo(geo){
         if(admParts.length >= 2){
           const parent = admParts[admParts.length - 2];
           const child  = admParts[admParts.length - 1];
-          if(/[구읍면]$/.test(child) && /[시군]$/.test(parent)){
-            _parentCity = parent; // "안산시", "수원시", "성남시" 등
+          if(/[구읍면]$/.test(child) && /[시군]$/.test(parent) && !/특별|광역/.test(parent)){
+            _parentCity = parent; // "안산시", "수원시", "성남시" 등 (서울특별시, 부산광역시 등 제외)
             if(_sidoName && isMergedCity(_sidoName, parent)) _mergedCity = parent;
           }
         }
@@ -549,8 +587,16 @@ async function fetchSGISGeo(targetYear) {
   try {
     const proxy = ST.proxyUrl.replace(/\/$/, '');
     const authUrl = `https://sgisapi.mods.go.kr/OpenAPI3/auth/authentication.json?consumer_key=${encodeURIComponent(ST.sgisKey)}&consumer_secret=${encodeURIComponent(ST.sgisSecret)}`;
-    const ar = await fetch(`${proxy}?url=${encodeURIComponent(authUrl)}`);
-    const ad = await ar.json();
+    // SGIS: 직접 호출 먼저 시도, 실패 시 프록시
+    let ad;
+    try {
+      const ar = await fetch(authUrl);
+      if (ar.ok) ad = await ar.json();
+    } catch(e) {}
+    if (!ad || ad.errCd !== 0) {
+      const ar = await fetch(`${proxy}?url=${encodeURIComponent(authUrl)}`);
+      ad = await ar.json();
+    }
     if (ad.errCd !== 0) throw new Error(ad.errMsg);
     const token = ad.result.accessToken;
     
@@ -662,7 +708,10 @@ async function loadGeo(year) {
 
   if (ST.sgisKey && ST.sgisSecret && ST.proxyUrl) {
     await fetchSGISGeo(year);
-    return;
+    // SGIS 성공 시 이미 rebuildMap() 호출됨 → 지도 로딩 완료면 종료
+    if (ST.geoLoaded) return;
+    // 실패 시 CDN fallback으로 계속
+    txt.textContent = `SGIS 실패, 기본 지도로 대체합니다...`;
   }
 
   txt.textContent = `SGIS 연동이 안되어 기본 지도를 띄웁니다.`;
@@ -700,7 +749,21 @@ function rebuildMap() {
   d3.select('#map-svg').selectAll('*').remove();
   d3.select('#map-svg').on('.zoom', null);
   ST.currentTransform = d3.zoomIdentity;
-  
+
+  // 광역시·특별시가 도 province 위에 그려져야 hole을 채울 수 있음
+  // 도(道) 먼저, 시(市/자치시/광역시) 나중에 렌더
+  if(ST.sidoGeo){
+    const isMetroCity = f => {
+      const nm = String(f.properties.name||f.properties.adm_nm||'');
+      return /광역시|특별시|특별자치시/.test(nm);
+    };
+    const sorted = [
+      ...ST.sidoGeo.features.filter(f => !isMetroCity(f)),
+      ...ST.sidoGeo.features.filter(f =>  isMetroCity(f)),
+    ];
+    ST.sidoGeo = {...ST.sidoGeo, features: sorted};
+  }
+
   if (ST.sigunguGeo) preprocessSggColors(ST.currentSgId);
   initMapLayers();
   renderList();
@@ -783,10 +846,20 @@ function initMapLayers(){
         d3.select(this).attr('opacity',0.75); 
         const rawNm=String(d.properties.name||d.properties.adm_nm||d.properties.SIGUNGU_NM||'').trim()||extractSggName(d.properties);
         const party=d.properties._sggParty||getSggParty(sidoName,rawNm,ST.currentSgId,d.properties)||null;
-        // 툴팁 지명: "상록구" 단독보다 "안산시 상록구"처럼 상위 시 포함이 더 명확
-        const dispNm = d.properties._parentCity
-          ? `${d.properties._parentCity.replace(/시$|군$/,'')} ${rawNm.split(/\s+/).pop()}`
-          : rawNm;
+        // 툴팁 지명: 항상 마지막 행정구역 단위만 표시 ("서울특별시 종로구" → "종로구", "안산시 상록구" → "안산 상록구")
+        let dispNm;
+        if(d.properties._mergedCity){
+          // 통합시 구: "안산 상록구" 형태
+          const lastPart=rawNm.split(/\s+/).pop()||rawNm;
+          dispNm=`${d.properties._mergedCity.replace(/시$|군$/,'')} ${lastPart}`;
+        }else if(d.properties._parentCity){
+          // 일반 상위시 구: "진주 수곡면" 형태
+          const lastPart=rawNm.split(/\s+/).pop()||rawNm;
+          dispNm=`${d.properties._parentCity.replace(/시$|군$/,'')} ${lastPart}`;
+        }else{
+          // 광역시/특별시 구, 독립 시/군: 마지막 단어만
+          dispNm=rawNm.split(/\s+/).pop()||rawNm;
+        }
         showSggTooltip(ev,dispNm,party,sidoName,d.properties);
       } else {
         d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity', ST.bgOpacity + 0.2);
@@ -825,6 +898,24 @@ function initMapLayers(){
     .text(d=>shortSido(getSidoNameFromProps(d.properties)));
 
   // 4. 레이블 (SGG)
+  // 통합시(수원·성남·안양·안산·용인 등)는 구 여러 개에 같은 이름이 붙으므로
+  // 가장 넓은 구(bounding box 기준) 딱 하나만 대표 레이블로 사용
+  const _mergedRep = new Map(); // "sidoName_mergedCity" → 대표 feature
+  const _mergedArea = new Map();
+  ST.sigunguGeo.features.forEach(f => {
+    const p = f.properties;
+    if(!p._mergedCity) return;
+    const key = `${p._sidoName||''}_${p._mergedCity}`;
+    try {
+      const b = _path.bounds(f);
+      const area = (b[1][0]-b[0][0]) * (b[1][1]-b[0][1]);
+      if(!_mergedArea.has(key) || area > _mergedArea.get(key)){
+        _mergedArea.set(key, area);
+        _mergedRep.set(key, f);
+      }
+    } catch(e){}
+  });
+
   d3.select('#lbl-layer').selectAll('.sgg-lbl')
     .data(ST.sigunguGeo.features).join('text')
     .attr('class','sgg-lbl')
@@ -836,8 +927,10 @@ function initMapLayers(){
     .attr('opacity', 0)
     .text(d=>{
         const p = d.properties;
-        // 통합시(안산시, 수원시 등)에 속한 구/면이면 시 이름으로 표시
+        // 통합시 소속 구면: 대표 feature(가장 넓은 구)에만 시 이름 표시, 나머지는 빈 문자열
         if(p._mergedCity){
+          const key = `${p._sidoName||''}_${p._mergedCity}`;
+          if(_mergedRep.get(key) !== d) return '';
           return p._mergedCity.replace(/시$|군$/,'').slice(0,4);
         }
         if(p._parentCity){
@@ -1002,20 +1095,59 @@ function changeStrokeWidth(val) {
 
 function buildSggResultPanel(sidoName){
   const sgId=ST.currentSgId;
-  const sggData=D_SGG[sgId]?.[sidoName]||null;
-  const hasFallback=!sggData&&D_SGG['20220601']?.[sidoName];
   const noSgg=NO_SGG.includes(sidoName);
   const listEl=document.getElementById('sido-list');
   if(noSgg){
     listEl.innerHTML='<div style="padding:10px 8px;font-size:11px;color:var(--dim)">기초단체장 선거 없음</div>';return;
   }
+
+  const sggData=D_SGG[sgId]?.[sidoName]||null;
+  const uncList=D_UNCONTESTED[sgId]?.[sidoName]||[];
+
+  // sggName 표시용: "안산시장" → "안산", "예천군수" → "예천" 등 직위 제거
+  const displaySggName = s => String(s||'')
+    .replace(/시장$|군수$|구청장$|교육감$/,'')
+    .replace(/선거구$/,'')
+    .trim();
+
+  // ── 무투표만 있는 경우 (D_SGG 없음) ──
+  if(!sggData && uncList.length){
+    const shortNm=sidoName.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
+    const counts={};
+    uncList.forEach(u=>{counts[u.party]=(counts[u.party]||0)+1;});
+    let html=`<div id="list-hdr" style="font-size:11px;color:var(--dim);font-weight:600;padding:4px 8px 5px">기초단체장 · ${shortNm}</div>`;
+    html+=`<div style="display:flex;gap:5px;flex-wrap:wrap;padding:0 8px 8px">`;
+    Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([p,n])=>{
+      html+=`<span style="font-size:11px;padding:2px 7px;border-radius:3px;font-weight:700;background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}</span>`;
+    });
+    html+=`</div>`;
+    uncList.forEach(u=>{
+      const nm=displaySggName(u.sggName);
+      html+=`<div class="srow" style="cursor:default">
+        <div class="sdot" style="background:${pc(u.party)}"></div>
+        <div class="sname">${nm}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="sparty" style="color:${pc(u.party)}">${ps(u.party)}</span>
+            <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span>
+          </div>
+          ${u.candName?`<div style="font-size:10px;color:var(--sub);margin-top:1px">${u.candName}</div>`:''}
+        </div>
+      </div>`;
+    });
+    listEl.innerHTML=html;
+    return;
+  }
+
+  // ── 일반 개표 데이터 없는 경우 ──
   if(!sggData){
+    const hasFallback=D_SGG['20220601']?.[sidoName];
     const yr=ELECTIONS.find(e=>e.sgId===sgId)?.year||sgId;
     const loadingMsg=ST.apiKey?`⏳ ${yr}년 시군구 결과 로딩 중...`:`${yr}년 기초단체장 데이터 없음`;
     listEl.innerHTML=`<div style="padding:10px 8px;font-size:11px;color:var(--dim)">${loadingMsg}<br><span style="color:${hasFallback?'#6a9af5':'var(--dim)'}">${hasFallback?'광역단체장 기준으로 색상 표시됨':'(광역단체장 기준 색상)'}</span></div>`;return;
   }
 
-  // 같은 canonical key로 정규화해 중복 항목 병합 (더 확정적인 데이터 우선)
+  // ── 정규 개표 데이터 있는 경우 ──
   const normData={};
   const normDetail={};
   const score=s=>s==='uncontested'?4:s==='final'?3:s==='counting'?2:1;
@@ -1028,6 +1160,18 @@ function buildSggResultPanel(sidoName){
       normDetail[key]=det;
     }
   }
+  // 무투표 항목을 정규 데이터에 없는 경우 직접 추가 (이름 매칭 없이 raw 표시)
+  uncList.forEach(u=>{
+    const nm=displaySggName(u.sggName);
+    if(!normData[nm]){
+      normData[nm]=u.party;
+      normDetail[nm]={winner:u.party,cands:[{name:u.candName,party:u.party,votes:0,pct:100}],rate:100,status:'uncontested'};
+    }
+  });
+  _renderSggPanel(listEl,sidoName,normData,normDetail);
+}
+
+function _renderSggPanel(listEl,sidoName,normData,normDetail){
   const counts={};
   Object.entries(normData).forEach(([,p])=>{counts[p]=(counts[p]||0)+1;});
   const shortNm=sidoName.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
@@ -1044,7 +1188,8 @@ function buildSggResultPanel(sidoName){
     const statusBadge = isUncontested
       ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3)">무투표</span>`
       : (top ? `<span style="font-size:10px;color:var(--dim)">${top.pct}%</span>` : '');
-    const candName = (!isUncontested && top) ? top.name : '';
+    // 무투표: 후보자 이름도 표시
+    const candName = isUncontested ? (top?.name||'') : (top ? top.name : '');
     html+=`<div class="srow" style="cursor:default">
       <div class="sdot" style="background:${pc(party)}"></div>
       <div class="sname">${nm}</div>
@@ -1350,10 +1495,54 @@ const NEC_SIDO_NAMES={
 };
 
 async function _necFetch(necUrl){
-  const url=ST.proxyUrl ? ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}` : necUrl;
+  // 1차: 직접 호출 시도 (Windows/Mac 모두 가능한 경우)
+  try{
+    const r=await fetch(necUrl,{headers:{'Accept':'application/json'}});
+    if(r.ok){
+      const j=await r.json();
+      const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+      return Array.isArray(items)?items:(items?[items]:null);
+    }
+  }catch(e){}
+  // 2차: 프록시 경유
+  if(!ST.proxyUrl) throw new Error('프록시 미설정');
+  const url=ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`;
   const r=await fetch(url);
   if(!r.ok)throw new Error(`HTTP ${r.status}`);
   const j=await r.json();
+  const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+  return Array.isArray(items)?items:(items?[items]:null);
+}
+
+// 직접 호출 우선, 실패 시 프록시 fallback (무투표 API 전용)
+async function _necFetchDirect(necUrl){
+  // apis.data.go.kr는 http:// 서비스 → HTTPS 페이지에서 직접 호출 불가(mixed content)
+  // 프록시가 있으면 무조건 프록시 경유, 없으면 직접 시도
+  if(ST.proxyUrl){
+    const url=ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`;
+    console.log('[무투표 프록시호출]', url);
+    const r=await fetch(url);
+    console.log('[무투표 프록시 응답]', r.status);
+    if(!r.ok) throw new Error(`프록시 HTTP ${r.status}`);
+    const text=await r.text();
+    console.log('[무투표 body 앞150자]', text.slice(0,150));
+    let j;
+    try{ j=JSON.parse(text); }catch(e){
+      console.warn('[무투표] JSON 파싱 실패, body:', text.slice(0,200));
+      throw new Error('JSON 파싱 실패');
+    }
+    const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+    console.log('[무투표 items]', Array.isArray(items)?items.length+'건':items);
+    return Array.isArray(items)?items:(items?[items]:null);
+  }
+  // 프록시 없는 경우 직접 시도 (로컬 개발환경 등)
+  console.log('[무투표 직접호출]', necUrl);
+  const r=await fetch(necUrl,{headers:{'Accept':'application/json'}});
+  console.log('[무투표 직접호출 응답]', r.status);
+  if(!r.ok) throw new Error(`직접 HTTP ${r.status}`);
+  const text=await r.text();
+  let j;
+  try{ j=JSON.parse(text); }catch(e){ throw new Error('JSON 파싱 실패'); }
   const items=j?.response?.body?.items?.item??j?.body?.items?.item;
   return Array.isArray(items)?items:(items?[items]:null);
 }
@@ -1527,6 +1716,18 @@ async function fetchSggBySido(sgId,sidoNm){
         rate: sggRate,
         status: newStatus
       };
+      // 무투표로 감지된 경우 D_UNCONTESTED에도 저장 (전용 API 불필요)
+      if(isUncontested){
+        if(!D_UNCONTESTED[sgId])D_UNCONTESTED[sgId]={};
+        if(!D_UNCONTESTED[sgId][sidoNm])D_UNCONTESTED[sgId][sidoNm]=[];
+        if(!D_UNCONTESTED[sgId][sidoNm].some(e=>e.sggName===rawWiwName)){
+          D_UNCONTESTED[sgId][sidoNm].push({
+            sggName: rawWiwName,
+            party: cands[0].party,
+            candName: cands[0].name
+          });
+        }
+      }
       // 더 확정적인 데이터 우선 유지
       const prev=detail[wiwName];
       const score=s=>s==='uncontested'?4:s==='final'?3:s==='counting'?2:1;
@@ -1591,65 +1792,63 @@ async function fetchAllSggAPI(sgId){
  * D_SGG / ST.sggDetail의 해당 선거구를 'uncontested'로 마킹
  */
 async function fetchUncontestedSgg(sgId){
-  if(!ST.apiKey)return;
+  const key = ST.uncApiKey || ST.apiKey;  // 무투표 전용 키 우선, 없으면 일반 키
+  if(!key)return;
+  console.log('[무투표] fetchUncontestedSgg 시작, sgId=', sgId, '키:', key===ST.uncApiKey?'무투표전용':'일반키');
   try{
-    const nameList = [...SIDO_ALL.flatMap(nm => NEC_SIDO_NAMES[nm]||[nm]), ''];
-    // 시도명 없이 전체 한 번에 요청 (sdName 생략)
-    // ★ API 가이드 기준 정확한 서비스명: WtvtelpcInfoInqireService
-    const baseUrl = `https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/getWtvtelpcsccnInfoInqire`
-      + `?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json`;
-    const rows = await _necFetchAll(baseUrl);
-    if(!rows||!rows.length) return;
+    const ENDPOINTS=[
+      'getWtvtelpcsccnInfoInqire',
+      'getWtvtelpccndaInfoInqire',
+    ];
+    let rows=null;
+    for(const ep of ENDPOINTS){
+      const baseUrl=`https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/${ep}`
+        +`?serviceKey=${encodeURIComponent(key)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json&pageNo=1`;
+      console.log('[무투표] 엔드포인트 시도:', ep);
+      try{
+        const r=await _necFetchDirect(baseUrl);
+        console.log('[무투표] 결과:', r?.length ?? '없음', '건');
+        if(r&&r.length){rows=r;break;}
+      }catch(e){console.warn('[무투표]',ep,'예외:', e.message);}
+    }
+    if(!rows||!rows.length){
+      console.warn('[무투표] 두 엔드포인트 모두 데이터 없음');
+      return;
+    }
+    console.log('[무투표] 총', rows.length, '건 수신, 첫 행:', JSON.stringify(rows[0]).slice(0,150));
+
+    if(!D_UNCONTESTED[sgId])D_UNCONTESTED[sgId]={};
 
     rows.forEach(row=>{
       const sdName  = String(row.sdName||'').trim();
-      const sggName = String(row.sggName||'').trim();  // API 응답 필드: sggName만 존재 (wiwName 없음)
+      const sggName = String(row.sggName||'').trim();
       const party   = String(row.jdName||'무소속').trim();
       const candName= String(row.name||'').trim();
+      if(!sggName||!party)return;
 
-      // 시도명 정규화
       const sidoNm = SIDO_ALL.find(s=>{
         const aliases = NEC_SIDO_NAMES[s]||[s];
         return aliases.some(a=>sdName.includes(a)||a.includes(sdName));
       }) || sdName;
+      if(!sidoNm){ console.warn('[무투표] 시도명 매핑 실패:', sdName); return; }
 
-      if(!sidoNm)return;
-
-      // D_SGG 업데이트
-      if(!D_SGG[sgId])D_SGG[sgId]={};
-      if(!D_SGG[sgId][sidoNm])D_SGG[sgId][sidoNm]={};
-
-      // canonical key로 정규화 — fetchSggBySido와 동일 규칙 사용
-      const rawSgg=sggName.replace(/[가나다라마바사]선거구$/,'').trim();
-      const cleanSgg=canonicalSggKey(sidoNm,rawSgg)||rawSgg;
-
-      // 기존에 같은 canonical key로 저장된 항목이 있으면 그 key 우선 사용
-      const strip=s=>String(s||'').replace(/\s+/g,'').replace(/[시구군읍면동리]$/,'');
-      const existingKey=Object.keys(D_SGG[sgId][sidoNm]).find(k=>
-        k===cleanSgg||strip(k)===strip(cleanSgg)
-      )||cleanSgg;
-
-      D_SGG[sgId][sidoNm][existingKey]=party;
-
-      // sggDetail 업데이트
-      if(!ST.sggDetail)ST.sggDetail={};
-      if(!ST.sggDetail[sgId])ST.sggDetail[sgId]={};
-      if(!ST.sggDetail[sgId][sidoNm])ST.sggDetail[sgId][sidoNm]={};
-
-      ST.sggDetail[sgId][sidoNm][existingKey]={
-        winner: party,
-        cands: [{name: candName, party, votes: 0, pct: 100}],
-        rate: 100,
-        status: 'uncontested'
-      };
+      if(!D_UNCONTESTED[sgId][sidoNm])D_UNCONTESTED[sgId][sidoNm]=[];
+      if(!D_UNCONTESTED[sgId][sidoNm].some(e=>e.sggName===sggName)){
+        D_UNCONTESTED[sgId][sidoNm].push({sggName, party, candName});
+        console.log('[무투표 저장]', sidoNm, sggName, party, candName);
+      }
     });
 
-    // 갱신
+    console.log('[무투표] D_UNCONTESTED 최종:', JSON.stringify(
+      Object.fromEntries(Object.entries(D_UNCONTESTED[sgId]||{}).map(([k,v])=>[k,v.length+'건']))
+    ));
+
     preprocessSggColors(sgId);
-    if(ST.selectedSido){ updateMapColors(); buildSggResultPanel(ST.selectedSido); }
+    updateMapColors();
+    if(ST.selectedSido) buildSggResultPanel(ST.selectedSido);
 
   }catch(e){
-    console.warn('[무투표 API]', e);
+    console.warn('[무투표 API 전체 예외]', e);
   }
 }
 
@@ -1660,11 +1859,13 @@ async function openSettings(){
   ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
   ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
   ST.apiKey=localStorage.getItem('el_apikey')||'';
+  ST.uncApiKey=localStorage.getItem('el_apikey_unc')||'';
   ST.proxyUrl=localStorage.getItem('el_proxy')||'';
   document.getElementById('in-sgis-key').value=ST.sgisKey;
   document.getElementById('in-sgis-sec').value=ST.sgisSecret;
   document.getElementById('in-proxy').value=ST.proxyUrl;
   document.getElementById('in-apikey').value=ST.apiKey;
+  document.getElementById('in-apikey-unc').value=ST.uncApiKey;
   setMode(ST.mode,false);setPoll(ST.pollSec,false);
   
   const targetYear = curEl().year;
@@ -1681,10 +1882,12 @@ function saveSettings(){
   const ss=document.getElementById('in-sgis-sec').value.trim();
   const proxy=document.getElementById('in-proxy').value.trim();
   const ak=document.getElementById('in-apikey').value.trim();
+  const aku=document.getElementById('in-apikey-unc').value.trim();
   if(sk){ST.sgisKey=sk;localStorage.setItem('el_sgis_key',sk);}
   if(ss){ST.sgisSecret=ss;localStorage.setItem('el_sgis_secret',ss);}
   if(proxy){ST.proxyUrl=proxy;localStorage.setItem('el_proxy',proxy);}
   if(ak){ST.apiKey=ak;localStorage.setItem('el_apikey',ak);}
+  if(aku){ST.uncApiKey=aku;localStorage.setItem('el_apikey_unc',aku);}
   localStorage.setItem('el_mode',ST.mode);localStorage.setItem('el_poll',ST.pollSec);
   updateHeader();closeSettings();
 }
@@ -1708,6 +1911,7 @@ window.addEventListener('resize',()=>{
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ST.selectedSido)drillUp();});
 
 ST.apiKey=localStorage.getItem('el_apikey')||'';
+ST.uncApiKey=localStorage.getItem('el_apikey_unc')||'';
 ST.proxyUrl=localStorage.getItem('el_proxy')||'';
 ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
 ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
