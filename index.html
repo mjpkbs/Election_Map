@@ -239,7 +239,8 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
         <button class="tbtn" id="mode-real" onclick="setMode('real')">🌐 선관위 API</button>
       </div></div>
     <div id="real-s" style="display:none">
-      <div class="m-group"><label class="m-lbl">공공데이터 API Key</label><input class="m-input" type="password" id="in-apikey" placeholder="투개표정보 API 키"></div>
+      <div class="m-group"><label class="m-lbl">공공데이터 API Key (투·개표)</label><input class="m-input" type="password" id="in-apikey" placeholder="투개표정보 API 키"></div>
+      <div class="m-group"><label class="m-lbl">공공데이터 API Key (무투표)</label><input class="m-input" type="password" id="in-apikey-unc" placeholder="무투표선거구 정보 API 키 (별도 신청)"></div>
     </div>
     <div class="m-group"><label class="m-lbl">SGIS 지도 연동</label>
       <input class="m-input" type="text" id="in-sgis-key" placeholder="SGIS Consumer Key" style="margin-bottom:5px">
@@ -510,8 +511,8 @@ let ST={
   data:{}, sggDetail:{},  
   dataSource:'mock', showLabels:true, selectedSido:null,
   bgOpacity:0.3,
-  sidoStrokeWidth: 0.5, // 굵기를 0.8 -> 0.5로 디폴트 하향 (세련되게)
-  mode:'mock',apiKey:'',proxyUrl:'',sgisKey:'',sgisSecret:'',pollSec:30,isLive:false,pollTimer:null,
+  sidoStrokeWidth: 0.5,
+  mode:'mock',apiKey:'',uncApiKey:'',proxyUrl:'',sgisKey:'',sgisSecret:'',pollSec:30,isLive:false,pollTimer:null,
 };
 const curEl=()=>ELECTIONS.find(e=>e.sgId===ST.currentSgId);
 const isUpcoming=()=>curEl()?.status==='upcoming';
@@ -1704,6 +1705,18 @@ async function fetchSggBySido(sgId,sidoNm){
         rate: sggRate,
         status: newStatus
       };
+      // 무투표로 감지된 경우 D_UNCONTESTED에도 저장 (전용 API 불필요)
+      if(isUncontested){
+        if(!D_UNCONTESTED[sgId])D_UNCONTESTED[sgId]={};
+        if(!D_UNCONTESTED[sgId][sidoNm])D_UNCONTESTED[sgId][sidoNm]=[];
+        if(!D_UNCONTESTED[sgId][sidoNm].some(e=>e.sggName===rawWiwName)){
+          D_UNCONTESTED[sgId][sidoNm].push({
+            sggName: rawWiwName,
+            party: cands[0].party,
+            candName: cands[0].name
+          });
+        }
+      }
       // 더 확정적인 데이터 우선 유지
       const prev=detail[wiwName];
       const score=s=>s==='uncontested'?4:s==='final'?3:s==='counting'?2:1;
@@ -1768,8 +1781,9 @@ async function fetchAllSggAPI(sgId){
  * D_SGG / ST.sggDetail의 해당 선거구를 'uncontested'로 마킹
  */
 async function fetchUncontestedSgg(sgId){
-  if(!ST.apiKey)return;
-  console.log('[무투표] fetchUncontestedSgg 시작, sgId=', sgId);
+  const key = ST.uncApiKey || ST.apiKey;  // 무투표 전용 키 우선, 없으면 일반 키
+  if(!key)return;
+  console.log('[무투표] fetchUncontestedSgg 시작, sgId=', sgId, '키:', key===ST.uncApiKey?'무투표전용':'일반키');
   try{
     const ENDPOINTS=[
       'getWtvtelpcsccnInfoInqire',
@@ -1778,7 +1792,7 @@ async function fetchUncontestedSgg(sgId){
     let rows=null;
     for(const ep of ENDPOINTS){
       const baseUrl=`https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/${ep}`
-        +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json&pageNo=1`;
+        +`?serviceKey=${encodeURIComponent(key)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json&pageNo=1`;
       console.log('[무투표] 엔드포인트 시도:', ep);
       try{
         const r=await _necFetchDirect(baseUrl);
@@ -1834,11 +1848,13 @@ async function openSettings(){
   ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
   ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
   ST.apiKey=localStorage.getItem('el_apikey')||'';
+  ST.uncApiKey=localStorage.getItem('el_apikey_unc')||'';
   ST.proxyUrl=localStorage.getItem('el_proxy')||'';
   document.getElementById('in-sgis-key').value=ST.sgisKey;
   document.getElementById('in-sgis-sec').value=ST.sgisSecret;
   document.getElementById('in-proxy').value=ST.proxyUrl;
   document.getElementById('in-apikey').value=ST.apiKey;
+  document.getElementById('in-apikey-unc').value=ST.uncApiKey;
   setMode(ST.mode,false);setPoll(ST.pollSec,false);
   
   const targetYear = curEl().year;
@@ -1855,10 +1871,12 @@ function saveSettings(){
   const ss=document.getElementById('in-sgis-sec').value.trim();
   const proxy=document.getElementById('in-proxy').value.trim();
   const ak=document.getElementById('in-apikey').value.trim();
+  const aku=document.getElementById('in-apikey-unc').value.trim();
   if(sk){ST.sgisKey=sk;localStorage.setItem('el_sgis_key',sk);}
   if(ss){ST.sgisSecret=ss;localStorage.setItem('el_sgis_secret',ss);}
   if(proxy){ST.proxyUrl=proxy;localStorage.setItem('el_proxy',proxy);}
   if(ak){ST.apiKey=ak;localStorage.setItem('el_apikey',ak);}
+  if(aku){ST.uncApiKey=aku;localStorage.setItem('el_apikey_unc',aku);}
   localStorage.setItem('el_mode',ST.mode);localStorage.setItem('el_poll',ST.pollSec);
   updateHeader();closeSettings();
 }
@@ -1882,6 +1900,7 @@ window.addEventListener('resize',()=>{
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ST.selectedSido)drillUp();});
 
 ST.apiKey=localStorage.getItem('el_apikey')||'';
+ST.uncApiKey=localStorage.getItem('el_apikey_unc')||'';
 ST.proxyUrl=localStorage.getItem('el_proxy')||'';
 ST.sgisKey=localStorage.getItem('el_sgis_key')||'';
 ST.sgisSecret=localStorage.getItem('el_sgis_secret')||'';
