@@ -825,6 +825,24 @@ function initMapLayers(){
     .text(d=>shortSido(getSidoNameFromProps(d.properties)));
 
   // 4. 레이블 (SGG)
+  // 통합시(수원·성남·안양·안산·용인 등)는 구 여러 개에 같은 이름이 붙으므로
+  // 가장 넓은 구(bounding box 기준) 딱 하나만 대표 레이블로 사용
+  const _mergedRep = new Map(); // "sidoName_mergedCity" → 대표 feature
+  const _mergedArea = new Map();
+  ST.sigunguGeo.features.forEach(f => {
+    const p = f.properties;
+    if(!p._mergedCity) return;
+    const key = `${p._sidoName||''}_${p._mergedCity}`;
+    try {
+      const b = _path.bounds(f);
+      const area = (b[1][0]-b[0][0]) * (b[1][1]-b[0][1]);
+      if(!_mergedArea.has(key) || area > _mergedArea.get(key)){
+        _mergedArea.set(key, area);
+        _mergedRep.set(key, f);
+      }
+    } catch(e){}
+  });
+
   d3.select('#lbl-layer').selectAll('.sgg-lbl')
     .data(ST.sigunguGeo.features).join('text')
     .attr('class','sgg-lbl')
@@ -836,8 +854,10 @@ function initMapLayers(){
     .attr('opacity', 0)
     .text(d=>{
         const p = d.properties;
-        // 통합시(안산시, 수원시 등)에 속한 구/면이면 시 이름으로 표시
+        // 통합시 소속 구면: 대표 feature(가장 넓은 구)에만 시 이름 표시, 나머지는 빈 문자열
         if(p._mergedCity){
+          const key = `${p._sidoName||''}_${p._mergedCity}`;
+          if(_mergedRep.get(key) !== d) return '';
           return p._mergedCity.replace(/시$|군$/,'').slice(0,4);
         }
         if(p._parentCity){
