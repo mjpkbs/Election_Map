@@ -1491,6 +1491,29 @@ async function _necFetch(necUrl){
   return Array.isArray(items)?items:(items?[items]:null);
 }
 
+// 직접 호출 우선, 실패 시 프록시 fallback (무투표 API 전용)
+async function _necFetchDirect(necUrl){
+  // 1차: 직접 호출 (apis.data.go.kr는 CORS 지원)
+  try{
+    const r=await fetch(necUrl,{headers:{'Accept':'application/json'}});
+    if(r.ok){
+      const j=await r.json();
+      const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+      return Array.isArray(items)?items:(items?[items]:null);
+    }
+  }catch(e){}
+  // 2차: 프록시 경유
+  if(ST.proxyUrl){
+    const url=ST.proxyUrl.replace(/\/$/,'')+`?url=${encodeURIComponent(necUrl)}`;
+    const r=await fetch(url);
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const j=await r.json();
+    const items=j?.response?.body?.items?.item??j?.body?.items?.item;
+    return Array.isArray(items)?items:(items?[items]:null);
+  }
+  throw new Error('프록시 미설정');
+}
+
 async function fetchOneSido(sgId,nm){
   const nameList=NEC_SIDO_NAMES[nm]||[nm];
   let arr=null;
@@ -1734,11 +1757,12 @@ async function fetchUncontestedSgg(sgId){
     let rows=null;
     for(const ep of ENDPOINTS){
       const baseUrl=`https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/${ep}`
-        +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json`;
+        +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json&pageNo=1`;
       try{
-        const r=await _necFetchAll(baseUrl);
+        // 직접 호출 우선, 실패 시 프록시 (worker 문제 우회)
+        const r=await _necFetchDirect(baseUrl);
         if(r&&r.length){rows=r;break;}
-      }catch(e){}
+      }catch(e){console.warn('[무투표]',ep,e);}
     }
     if(!rows||!rows.length) return;
 
