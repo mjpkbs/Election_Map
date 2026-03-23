@@ -414,6 +414,19 @@ function getSggParty(sidoName,sggRawName,sgId,props){
   return null;
 }
 
+function getSggDetail(sidoName, sggRawName, props){
+  const detailTbl=ST.sggDetail?.[ST.currentSgId]?.[sidoName]||null;
+  if(!detailTbl)return null;
+  const key=canonicalSggKey(sidoName,sggRawName,props);
+  if(key&&detailTbl[key])return detailTbl[key];
+  const strip=s=>String(s||'').replace(/\s+/g,'').replace(/[시구군읍면동리]$/,'');
+  const target=strip(key||sggRawName);
+  for(const [k,v] of Object.entries(detailTbl)){
+    if(strip(k)===target)return v;
+  }
+  return null;
+}
+
 function preprocessSggColors(sgId){
   if(!ST.sigunguGeo)return;
   const codeToSido=Object.fromEntries(Object.entries(SIDO_CODE).map(([k,v])=>[v,k]));
@@ -774,7 +787,7 @@ function initMapLayers(){
         const dispNm = d.properties._parentCity
           ? `${d.properties._parentCity.replace(/시$|군$/,'')} ${rawNm.split(/\s+/).pop()}`
           : rawNm;
-        showSggTooltip(ev,dispNm,party,sidoName);
+        showSggTooltip(ev,dispNm,party,sidoName,d.properties);
       } else {
         d3.selectAll('.sgg-path').filter(f=>f.properties._sidoName===sidoName).attr('opacity', ST.bgOpacity + 0.2);
         showMainTooltip(ev,sidoName,svgEl.clientWidth);
@@ -1064,42 +1077,23 @@ function showMainTooltip(ev,nm,mapW){
   tt.innerHTML=h;tt.classList.add('on');moveTooltip(ev,mapW);
 }
 
-function showSggTooltip(ev,sggName,party,sidoName){
+function showSggTooltip(ev,sggName,party,sidoName,props){
   const tt=document.getElementById('tooltip');
+  const d=getSggDetail(sidoName,sggName,props);
+  const finalParty=d?.winner||party||null;
   let h=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">${sggName}</div>`;
-  if(party){
+  if(finalParty){
     h+=`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
-      <div style="width:7px;height:7px;border-radius:2px;background:${pc(party)}"></div>
-      <span style="font-size:11px;font-weight:700;color:${pc(party)}">${party}</span>
+      <div style="width:7px;height:7px;border-radius:2px;background:${pc(finalParty)}"></div>
+      <span style="font-size:11px;font-weight:700;color:${pc(finalParty)}">${finalParty}</span>
     </div>`;
-
-    // detail 매칭: canonicalSggKey로 정규화 후 exact match
-    const detail=ST.sggDetail?.[ST.currentSgId]?.[sidoName];
-    let d = null;
-    if(detail){
-      const lookupKey=canonicalSggKey(sidoName,sggName)||sggName;
-      d = detail[lookupKey];
-      if(!d){
-        const strip=s=>String(s||'').replace(/\s+/g,'').replace(/[시구군읍면동리]$/,'');
-        const target=strip(lookupKey);
-        const matchKey=Object.keys(detail).find(k=>strip(k)===target);
-        d=detail[matchKey];
-      }
+    if(d?.status==='uncontested'){
+      h+=`<div style="font-size:10px;color:#a78bfa;margin-bottom:5px">무투표 당선</div>`;
+    }else if(d?.status==='final'){
+      h+=`<div style="font-size:10px;color:#6aaa6a;margin-bottom:5px">개표완료</div>`;
+    }else if(d?.rate!=null){
+      h+=`<div style="font-size:10px;color:var(--sub);margin-bottom:5px">개표율 ${d.rate}%</div>`;
     }
-
-    // 개표율 표시 (status가 있는 경우)
-    if(d?.rate != null){
-      let statusTxt, statusColor;
-      if(d.status==='uncontested'){
-        statusTxt='무투표 당선'; statusColor='#a78bfa';
-      } else if(d.status==='final'){
-        statusTxt='개표완료'; statusColor='#6aaa6a';
-      } else {
-        statusTxt=`개표율 ${d.rate}%`; statusColor='var(--sub)';
-      }
-      h+=`<div style="font-size:10px;color:${statusColor};margin-bottom:5px">${statusTxt}</div>`;
-    }
-
     if(d?.cands){
       d.cands.slice(0,3).forEach((c,i)=>{
         h+=`<div style="margin-bottom:3px">
@@ -1582,6 +1576,13 @@ async function fetchAllSggAPI(sgId){
 
   // ★ 무투표 당선인 전용 API로 덮어쓰기
   await fetchUncontestedSgg(sgId);
+
+  // 무투표 데이터 반영 후 전체 재렌더
+  preprocessSggColors(sgId);
+  updateMapColors();
+  renderList();
+  renderSummaryBar();
+  if(ST.selectedSido){ buildSggResultPanel(ST.selectedSido); }
 }
 
 /**
