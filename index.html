@@ -1509,7 +1509,7 @@ async function fetchAllSggAPI(sgId){
 }
 
 /**
- * 무투표선거구 당선인 API (WtvtelcddInfoInqireService)
+ * 무투표선거구 당선인 API (WtvtelpcInfoInqireService)
  * 기초단체장(sgTypecode=4) 무투표 당선인을 가져와
  * D_SGG / ST.sggDetail의 해당 선거구를 'uncontested'로 마킹
  */
@@ -1518,15 +1518,15 @@ async function fetchUncontestedSgg(sgId){
   try{
     const nameList = [...SIDO_ALL.flatMap(nm => NEC_SIDO_NAMES[nm]||[nm]), ''];
     // 시도명 없이 전체 한 번에 요청 (sdName 생략)
-    const baseUrl = `https://apis.data.go.kr/9760000/WtvtelcddInfoInqireService/getWtvtelpcsccnInfoInqire`
+    // ★ API 가이드 기준 정확한 서비스명: WtvtelpcInfoInqireService
+    const baseUrl = `https://apis.data.go.kr/9760000/WtvtelpcInfoInqireService/getWtvtelpcsccnInfoInqire`
       + `?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4&numOfRows=1000&resultType=json`;
     const rows = await _necFetchAll(baseUrl);
     if(!rows||!rows.length) return;
 
     rows.forEach(row=>{
       const sdName  = String(row.sdName||'').trim();
-      const sggName = String(row.sggName||'').trim();
-      const wiwName = String(row.wiwName||'').trim();  // 구시군명 (개표 API·지도 피처와 동일 키)
+      const sggName = String(row.sggName||'').trim();  // API 응답 필드: sggName만 존재 (wiwName 없음)
       const party   = String(row.jdName||'무소속').trim();
       const candName= String(row.name||'').trim();
 
@@ -1542,19 +1542,17 @@ async function fetchUncontestedSgg(sgId){
       if(!D_SGG[sgId])D_SGG[sgId]={};
       if(!D_SGG[sgId][sidoNm])D_SGG[sgId][sidoNm]={};
 
-      // ★ wiwName(구시군명)을 우선 키로 사용 — fetchSggBySido·지도 피처와 동일 기준
-      // wiwName이 없을 때만 sggName 가/나 접미사 제거 후 fallback
+      // sggName에서 선거구 접미사 제거: "예천군가선거구" → "예천군", "종로구" → "종로구"
       const cleanSgg = sggName.replace(/[가나다라마바사]선거구$/, '').trim();
-      const key = wiwName || cleanSgg;
 
-      D_SGG[sgId][sidoNm][key] = party;
+      D_SGG[sgId][sidoNm][cleanSgg] = party;
 
       // sggDetail 업데이트
       if(!ST.sggDetail)ST.sggDetail={};
       if(!ST.sggDetail[sgId])ST.sggDetail[sgId]={};
       if(!ST.sggDetail[sgId][sidoNm])ST.sggDetail[sgId][sidoNm]={};
 
-      ST.sggDetail[sgId][sidoNm][key] = {
+      ST.sggDetail[sgId][sidoNm][cleanSgg] = {
         winner: party,
         cands: [{name: candName, party, votes: 0, pct: 0}],
         rate: 100,
