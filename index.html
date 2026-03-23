@@ -338,11 +338,24 @@ function stripOfficeSuffix(name){
     .replace(/(시장선거|군수선거|구청장선거|교육감선거|선거구)$/g,'')
     .replace(/(시장|군수|구청장)$/g,'');
 }
+// NEC API가 구 지명으로 반환하는 시도명 별명 맵 (canonicalSggKey 내부 전용)
+const _SIDO_ALIASES={
+  '강원특별자치도':['강원도'],
+  '전북특별자치도':['전라북도'],
+  '제주특별자치도':['제주도'],
+};
 function canonicalSggKey(sidoName,rawName,props){
   let s=stripOfficeSuffix(rawName);
   if(!s)return '';
   const sidoCompact=String(sidoName||'').replace(/\s+/g,'');
   if(sidoCompact)s=s.replace(sidoCompact,'');
+  // NEC API가 구 지명을 반환할 때 (예: '강원도 인제군') 별명도 제거
+  const aliases=_SIDO_ALIASES[sidoName]||[];
+  for(const alias of aliases){
+    const ac=alias.replace(/\s+/g,'');
+    if(ac)s=s.replace(new RegExp('^'+ac+'\\s*'),'');
+  }
+  s=s.trim();
   // props에 _mergedCity/_parentCity 있으면 우선 사용
   if(props?._mergedCity&&isMergedCity(sidoName,props._mergedCity))return props._mergedCity;
   if(props?._parentCity&&isMergedCity(sidoName,props._parentCity))return props._parentCity;
@@ -1623,9 +1636,11 @@ async function fetchAllSidoAPI(sgId){
     }
   });
 
+  // 429 방지: 동시 2개 + 요청 사이 300ms 딜레이
+  const _sleep=ms=>new Promise(r=>setTimeout(r,ms));
   let idx = 0;
-  const workers = Array.from({length: 5}, async () => {
-      while (idx < tasks.length) await tasks[idx++]();
+  const workers = Array.from({length: 2}, async () => {
+      while (idx < tasks.length) { await tasks[idx++](); await _sleep(300); }
   });
   await Promise.all(workers);
 
@@ -1764,9 +1779,11 @@ async function fetchAllSggAPI(sgId){
     finally{done++;}
   });
 
+  // 429 방지: 동시 2개 + 요청 사이 300ms 딜레이
+  const _sleep2=ms=>new Promise(r=>setTimeout(r,ms));
   let idx = 0;
-  const workers = Array.from({length: 5}, async () => {
-      while (idx < tasks.length) await tasks[idx++]();
+  const workers = Array.from({length: 2}, async () => {
+      while (idx < tasks.length) { await tasks[idx++](); await _sleep2(300); }
   });
   await Promise.all(workers);
 
