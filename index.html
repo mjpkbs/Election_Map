@@ -2123,7 +2123,7 @@ async function exportToPhotopea(){
     if(isNational){
       // ── 전국 시도 뷰 ──
       const proj=d3.geoMercator().fitExtent([[40,40],[W-40,H-40]],ST.sidoGeo);
-      const pathFn=d3.geoPath().projection(proj).digits(1);
+      const pathFn=d3.geoPath().projection(proj).digits(0); // URL 길이 절약: 소수점 제거
       ST.sidoGeo.features.forEach(f=>{
         const nm=getSidoNameFromProps(f.properties);
         if(!nm)return;
@@ -2140,7 +2140,7 @@ async function exportToPhotopea(){
       if(!feats.length){alert('시군구 지도 데이터가 없습니다.');return;}
       const proj=d3.geoMercator().fitExtent([[60,60],[W-60,H-60]],
         {type:'FeatureCollection',features:feats});
-      const pathFn=d3.geoPath().projection(proj).digits(1);
+      const pathFn=d3.geoPath().projection(proj).digits(0); // URL 길이 절약
       feats.forEach(f=>{
         const p=f.properties;
         // ── 레이어 이름 결정 (툴팁과 동일 규칙) ──
@@ -2171,18 +2171,16 @@ async function exportToPhotopea(){
     // → 가나다 첫 번째('가')가 최상단이 되려면 SVG에서 맨 마지막에 배치
     const rev=[...regions].reverse(); // SVG 순서: 하→가  (PSD 패널: 가 상단)
     const pathLines=rev.map((r,i)=>
-      `  <path id="pp_r${i}" fill="${r.fill}" stroke="none" d="${r.d}"/>`
+      `<path id="pp_r${i}" fill="${r.fill}" d="${r.d}"/>`
     );
     const svgStr=[
-      `<?xml version="1.0" encoding="UTF-8"?>`,
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
-      `  <rect id="pp_bg" width="${W}" height="${H}" fill="#04060e"/>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">`,
+      `<rect id="pp_bg" width="${W}" height="${H}" fill="#04060e"/>`,
       ...pathLines,
       `</svg>`
-    ].join('\n');
+    ].join('');
 
     // ── rename + saveToOE 스크립트 ──
-    // step2에서 raw 문자열로 전송됨
     const nameMap=Object.fromEntries(
       [['pp_bg','배경'],...rev.map((r,i)=>[`pp_r${i}`,r.name])]
     );
@@ -2209,7 +2207,8 @@ async function exportToPhotopea(){
       :ST.selectedSido.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
     const filename=`KBS_선거지도_${label}.psd`;
 
-    console.log(`[PSD] 레이어 ${regions.length}개, SVG ${(svgStr.length/1024).toFixed(0)}KB`);
+    const svgKB=(svgStr.length/1024).toFixed(0);
+    console.log(`[PSD] 레이어 ${regions.length}개, SVG ${svgKB}KB`);
     if(btn)btn.textContent=`⏳ Photopea 로딩 중... (${regions.length}개 레이어)`;
     _openInPhotopea(svgStr,renameScript,filename,btn,origTxt);
 
@@ -2222,78 +2221,54 @@ async function exportToPhotopea(){
 
 function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
   // ════════════════════════════════════════════
-  // Photopea Live Messaging API (정확한 사용법)
-  //  - Photopea 준비 완료 시 → "done" 문자열 전송
-  //  - 파일 전송: raw ArrayBuffer 직접 postMessage
-  //  - 스크립트 실행: raw 문자열 직접 postMessage
-  //  - saveToOE("psd") → opener로 PSD ArrayBuffer 전송
+  // Photopea URL Hash API (달력 생성기와 동일한 방식)
+  //  - SVG를 base64 dataURI로 변환
+  //  - JSON 설정을 URL hash로 전달: files + script
+  //  - script에서 saveToOE("psd") 호출
+  //  - postMessage로 PSD ArrayBuffer 수신 → 자동 다운로드
   // ════════════════════════════════════════════
   const restore=()=>{if(btn){btn.textContent=origTxt;btn.disabled=false;}};
 
-  const svgBuf=new TextEncoder().encode(svgStr).buffer; // ArrayBuffer
-  let step=0;
-  let finished=false;
+  // SVG → base64 dataURI
+  const b64=btoa(unescape(encodeURIComponent(svgStr)));
+  const dataUri='data:image/svg+xml;base64,'+b64;
 
-  const ppWin=window.open('https://www.photopea.com','_blank');
+  const ppConfig={
+    files:[dataUri],
+    environment:{lang:'ko'},
+    script:renameScript
+  };
+
+  const ppUrl='https://www.photopea.com/#'+encodeURIComponent(JSON.stringify(ppConfig));
+  const ppWin=window.open(ppUrl,'_blank');
   if(!ppWin){
     alert('팝업이 차단되어 있습니다.\n주소창 우측의 팝업 허용 버튼을 클릭 후 다시 시도해주세요.');
     restore(); return;
   }
 
+  // saveToOE("psd") 결과를 postMessage로 수신 → 자동 다운로드
+  let finished=false;
   const handler=e=>{
     if(finished||e.source!==ppWin) return;
-
-    // ── "done" = Photopea 처리 완료 신호 ──
-    if(e.data==='done'){
-      step++;
-      console.log('[PSD] done step='+step);
-
-      if(step===1){
-        // Photopea 초기화 완료 → SVG 파일을 raw ArrayBuffer로 전송
-        ppWin.postMessage(svgBuf,'*');
-        if(btn) btn.textContent='⏳ SVG 로딩 중...';
-
-      }else if(step===2){
-        // SVG 로드 완료 → 레이어 rename 스크립트 + saveToOE 를 raw 문자열로 전송
-        ppWin.postMessage(renameScript,'*');
-        if(btn) btn.textContent='⏳ PSD 생성 중...';
-
-      }else if(step===3){
-        // 스크립트 실행 완료 → 다음 메시지로 PSD ArrayBuffer가 옴
-        // (step이 더 오면 무시)
-      }
-      return;
-    }
-
-    // ── PSD ArrayBuffer 수신 (saveToOE("psd") 결과) ──
     if(e.data instanceof ArrayBuffer && e.data.byteLength>1000){
       finished=true;
       window.removeEventListener('message',handler);
       clearTimeout(tid);
-
       const blob=new Blob([e.data],{type:'application/octet-stream'});
       const a=document.createElement('a');
       a.href=URL.createObjectURL(blob);
       a.download=filename;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(()=>URL.revokeObjectURL(a.href),8000);
-
       restore();
-      console.log(`[PSD] ✅ ${filename} 다운로드 (${(e.data.byteLength/1024).toFixed(0)} KB)`);
-      // Photopea 창은 닫지 않음 — 사용자가 직접 편집/저장 가능
+      console.log('[PSD] ✅ '+filename+' ('+Math.round(e.data.byteLength/1024)+' KB)');
     }
   };
   window.addEventListener('message',handler);
-
-  // ── 전체 타임아웃 3분 ──
   const tid=setTimeout(()=>{
-    if(finished) return;
-    finished=true;
     window.removeEventListener('message',handler);
     restore();
-    console.warn('[PSD] 타임아웃');
-    alert('Photopea 응답 없음 (3분 초과).\nPhotopea 창에서 File → Save As → PSD 로 직접 저장해주세요.');
-  },180000);
+  },300000);
 }
 
 // ════════════════════════════════════════════
