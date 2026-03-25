@@ -108,6 +108,8 @@ input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cur
 #list-hdr{font-size:11px;color:var(--dim);font-weight:600;padding:4px 8px 5px;}
 .srow{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:5px;cursor:pointer;border:1px solid transparent;margin-bottom:1px;transition:background .1s;}
 .srow:hover{background:rgba(10,16,30,.9);}.srow.active{background:rgba(20,36,80,.7);border-color:#2a3a6a;}
+.srow.emd-drillable:hover > span[title]{color:#4a6aaa;}
+.srow.emd-drillable:hover{background:rgba(10,16,30,.9);border-color:rgba(42,95,212,.25);}
 .sdot{width:7px;height:7px;border-radius:2px;flex-shrink:0;}
 .sname{flex:1;font-size:12px;color:#a8b0c8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .srow.active .sname{color:var(--text);font-weight:700;}
@@ -314,6 +316,7 @@ const ELECTIONS=[{sgId:'20260603',round:'제9회',year:2026,date:'2026.06.03',st
 const D_SIDO={};   
 const D_SGG={};    
 const D_UNCONTESTED={};  // sgId → sidoNm → [{sggName, party, candName}]  무투표 전용 raw 저장소
+const D_EMD={};          // sgId → sidoNm → sggNm → [{emdNm, winner, cands}]  읍면동 개표 캐시
 
 const SIDO_ALL=['서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시','세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도','경상북도','경상남도','제주특별자치도'];
 const SIDO_CODE={'서울특별시':'11','부산광역시':'26','대구광역시':'27','인천광역시':'28','광주광역시':'29','대전광역시':'30','울산광역시':'31','세종특별자치시':'36','경기도':'41','강원특별자치도':'42','충청북도':'43','충청남도':'44','전북특별자치도':'45','전라남도':'46','경상북도':'47','경상남도':'48','제주특별자치도':'50'};
@@ -522,7 +525,7 @@ let ST={
   sidoGeo:null,sigunguGeo:null,geoLoaded:false,
   currentSgId:'20260603',  
   data:{}, sggDetail:{},  
-  dataSource:'mock', showLabels:true, selectedSido:null,
+  dataSource:'mock', showLabels:true, selectedSido:null, selectedSgg:null,
   bgOpacity:0.3,
   sidoStrokeWidth: 0.5,
   mode:'mock',apiKey:'',uncApiKey:'',proxyUrl:'',sgisKey:'',sgisSecret:'',pollSec:30,isLive:false,pollTimer:null,
@@ -1080,6 +1083,7 @@ function _zoomToSido(sidoName){
 function drillUp(){
   if(!ST.selectedSido)return;
   ST.selectedSido=null;
+  ST.selectedSgg=null;
   
   document.getElementById('drill-nav').style.display='none';
   document.getElementById('opacity-row').style.display='none';
@@ -1107,6 +1111,13 @@ function changeStrokeWidth(val) {
 }
 
 function buildSggResultPanel(sidoName){
+  // 읍면동 서브패널이 열려있으면 그대로 유지
+  if(ST.selectedSgg && ST.selectedSgg.sidoNm===sidoName){
+    const sgId=ST.currentSgId;
+    const cached=D_EMD[sgId]?.[sidoName]?.[ST.selectedSgg.sggNm];
+    renderEmdPanel(sidoName,ST.selectedSgg.sggNm,cached??null,false);
+    return;
+  }
   const sgId=ST.currentSgId;
   const noSgg=NO_SGG.includes(sidoName);
   const listEl=document.getElementById('sido-list');
@@ -1203,7 +1214,9 @@ function _renderSggPanel(listEl,sidoName,normData,normDetail){
       : (top ? `<span style="font-size:10px;color:var(--dim)">${top.pct}%</span>` : '');
     // 무투표: 후보자 이름도 표시
     const candName = isUncontested ? (top?.name||'') : (top ? top.name : '');
-    html+=`<div class="srow" style="cursor:default">
+    const nmEsc=nm.replace(/'/g,"\\'");
+    const sidoEsc=sidoName.replace(/'/g,"\\'");
+    html+=`<div class="srow emd-drillable" onclick="selectSgg('${sidoEsc}','${nmEsc}')" title="${nm} 읍면동별 결과 보기">
       <div class="sdot" style="background:${pc(party)}"></div>
       <div class="sname">${nm}</div>
       <div style="flex:1;min-width:0">
@@ -1213,9 +1226,226 @@ function _renderSggPanel(listEl,sidoName,normData,normDetail){
         </div>
         ${candName?`<div style="font-size:10px;color:var(--sub);margin-top:1px">${candName}</div>`:''}
       </div>
+      <span style="font-size:10px;color:var(--border2);margin-left:2px;flex-shrink:0" title="읍면동 결과 보기">›</span>
     </div>`;
   });
   listEl.innerHTML=html;
+}
+
+// ════════════════════════════════════════════
+//  읍면동 드릴다운 (우측 패널)
+// ════════════════════════════════════════════
+
+function selectSgg(sidoNm, sggNm){
+  ST.selectedSgg={sidoNm,sggNm};
+  const sgId=ST.currentSgId;
+  const cached=D_EMD[sgId]?.[sidoNm]?.[sggNm];
+  renderEmdPanel(sidoNm,sggNm,cached??null,false);
+}
+
+function backToSggPanel(){
+  ST.selectedSgg=null;
+  buildSggResultPanel(ST.selectedSido);
+}
+
+function renderEmdPanel(sidoNm, sggNm, data, loading){
+  const listEl=document.getElementById('sido-list');
+  const hasApi=!!ST.apiKey;
+  const sgId=ST.currentSgId;
+  const sidoEsc=sidoNm.replace(/'/g,"\\'");
+  const sggEsc=sggNm.replace(/'/g,"\\'");
+
+  // ── 헤더 ──
+  const sggParty = D_SGG[sgId]?.[sidoNm]?.[sggNm] || null;
+  const partyBadge = sggParty
+    ? `<span style="font-size:9px;padding:1px 5px;border-radius:2px;font-weight:700;background:${pc(sggParty)}22;border:1px solid ${pc(sggParty)}44;color:${pc(sggParty)};flex-shrink:0">${ps(sggParty)}</span>`
+    : '';
+  let html=`
+    <div style="display:flex;align-items:center;gap:6px;padding:5px 8px 7px;border-bottom:1px solid var(--border)">
+      <button onclick="backToSggPanel()" style="background:rgba(18,89,195,.2);border:1px solid #2a5fd4;color:#6a9ff5;padding:3px 9px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;flex-shrink:0">← 목록</button>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:5px">${sggNm} ${partyBadge}</div>
+        <div style="font-size:10px;color:var(--dim)">읍면동별 개표현황</div>
+      </div>
+    </div>`;
+
+  if(loading){
+    html+=`<div style="padding:28px 8px;text-align:center">
+      <div class="spinner" style="margin:0 auto 10px"></div>
+      <div style="font-size:11px;color:var(--sub)">읍면동 데이터 불러오는 중...</div>
+    </div>`;
+  } else if(!data){
+    // 아직 미로드
+    if(hasApi){
+      html+=`<div style="padding:14px 10px">
+        <button onclick="loadEmdData('${sidoEsc}','${sggEsc}')"
+          style="width:100%;padding:9px;background:rgba(18,89,195,.25);border:1px solid #2a5fd4;color:#7aaef8;
+          border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;
+          display:flex;align-items:center;justify-content:center;gap:6px">
+          📥 읍면동 결과 가져오기
+        </button>
+        <div style="font-size:10px;color:var(--dim);text-align:center;margin-top:6px">API 1회 호출</div>
+      </div>`;
+    }else{
+      html+=`<div style="padding:16px 8px;text-align:center">
+        <div style="font-size:11px;color:var(--dim)">⚙ 설정에서 API 키를 입력해야<br>읍면동 결과를 조회할 수 있습니다</div>
+      </div>`;
+    }
+  } else if(data.length===0){
+    html+=`<div style="padding:16px 8px;text-align:center">
+      <div style="font-size:11px;color:var(--dim)">읍면동 데이터가 없습니다<br><span style="font-size:10px;color:#4a5a7a">API 응답 없음 또는 집계 전</span></div>
+      <button onclick="loadEmdData('${sidoEsc}','${sggEsc}')"
+        style="margin-top:8px;padding:5px 12px;background:rgba(18,89,195,.15);border:1px solid #2a4a8a;color:#6a9af5;
+        border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit">↻ 다시 시도</button>
+    </div>`;
+  } else {
+    // ── 정당별 요약 ──
+    const nonTotal = data.filter(r=>!r.isTotal);
+    const counts={};
+    (nonTotal.length ? nonTotal : data).forEach(r=>{counts[r.winner]=(counts[r.winner]||0)+1;});
+    const total=(nonTotal.length ? nonTotal : data).length;
+    html+=`<div style="padding:7px 8px 5px;display:flex;gap:5px;flex-wrap:wrap;border-bottom:1px solid var(--border)">`;
+    Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([p,n])=>{
+      html+=`<span style="font-size:10px;padding:2px 7px;border-radius:3px;font-weight:700;
+        background:${pc(p)}22;border:1px solid ${pc(p)}55;color:${pc(p)}">${ps(p)} ${n}/${total}</span>`;
+    });
+    html+=`</div>`;
+
+    // ── 읍면동 행 목록 ──
+    data.forEach(row=>{
+      const top=row.cands[0];
+      const sec=row.cands[1];
+      const margin=sec?(top.pct-sec.pct).toFixed(1):null;
+      const pct=top?.pct??0;
+      const totalVotes=row.cands.reduce((s,c)=>s+c.votes,0);
+      const isTotalRow=row.isTotal;
+      html+=`<div class="srow" style="cursor:default;flex-direction:column;align-items:stretch;gap:3px;padding:7px 8px;${isTotalRow?'border-bottom:1px solid var(--border2);background:rgba(255,255,255,.03)':''}">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="sdot" style="background:${pc(row.winner)};flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;font-weight:${isTotalRow?700:400};color:${isTotalRow?'var(--text)':'#a8b0c8'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${row.emdNm}${isTotalRow?' <span style="font-size:9px;color:var(--dim);font-weight:400">합계</span>':''}</div>
+          <span style="font-size:11px;font-weight:700;color:${pc(row.winner)};flex-shrink:0">${ps(row.winner)}</span>
+          <span style="font-size:10px;color:var(--dim);flex-shrink:0">${pct}%${margin?` <span style="font-size:9px;color:var(--dim)">+${margin}</span>`:''}</span>
+        </div>
+        ${top?.name?`<div style="font-size:10px;color:var(--sub);padding-left:13px">${top.name} <span style="color:var(--dim)">${top.votes.toLocaleString()}표</span>${sec?` / ${sec.name} <span style="color:var(--dim)">${sec.votes.toLocaleString()}표</span>`:''}</div>`:''}
+        <div style="margin-left:13px;background:#0c1220;height:2px;border-radius:1px">
+          <div style="width:${Math.min(pct,100)}%;height:100%;background:${pc(row.winner)};border-radius:1px;opacity:.7"></div>
+        </div>
+      </div>`;
+    });
+
+    // ── 새로고침 버튼 ──
+    html+=`<div style="padding:8px 10px;border-top:1px solid var(--border)">
+      <button onclick="loadEmdData('${sidoEsc}','${sggEsc}')"
+        style="width:100%;padding:5px;background:transparent;border:1px solid var(--border2);color:var(--sub);
+        border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit">↻ 다시 불러오기</button>
+    </div>`;
+  }
+
+  listEl.innerHTML=html;
+}
+
+async function loadEmdData(sidoNm, sggNm){
+  ST.selectedSgg={sidoNm,sggNm};
+  renderEmdPanel(sidoNm,sggNm,null,true);  // 로딩 상태
+  try{
+    const data=await fetchEmdBySgg(ST.currentSgId,sidoNm,sggNm);
+    if(!D_EMD[ST.currentSgId])D_EMD[ST.currentSgId]={};
+    if(!D_EMD[ST.currentSgId][sidoNm])D_EMD[ST.currentSgId][sidoNm]={};
+    D_EMD[ST.currentSgId][sidoNm][sggNm]=data;
+    renderEmdPanel(sidoNm,sggNm,data,false);
+  }catch(e){
+    console.error('[읍면동] 로드 실패:',e);
+    D_EMD[ST.currentSgId]??={};
+    D_EMD[ST.currentSgId][sidoNm]??={};
+    D_EMD[ST.currentSgId][sidoNm][sggNm]=[];
+    renderEmdPanel(sidoNm,sggNm,[],false);
+  }
+}
+
+async function fetchEmdBySgg(sgId, sidoNm, sggNm){
+  const nameList=NEC_SIDO_NAMES[sidoNm]||[sidoNm];
+  let arr=null;
+
+  // wiwName 후보군: 원본 / 공백 뒤 부분 / 접미사 제거
+  const buildWiwCandidates = nm => {
+    const s=new Set([nm]);
+    if(nm.includes(' ')) s.add(nm.split(' ').pop());
+    s.add(nm.replace(/시장$|군수$|구청장$/,''));
+    return [...s].filter(Boolean);
+  };
+
+  for(const sdName of nameList){
+    for(const wiwNm of buildWiwCandidates(sggNm)){
+      const url=`https://apis.data.go.kr/9760000/VoteXmntckInfoInqireService2/getXmntckSttusInfoInqire`
+        +`?serviceKey=${encodeURIComponent(ST.apiKey)}&sgId=${sgId}&sgTypecode=4`
+        +`&sdName=${encodeURIComponent(sdName)}&wiwName=${encodeURIComponent(wiwNm)}`
+        +`&numOfRows=300&pageNo=1&resultType=json`;
+      try{
+        const rows=await _necFetch(url);
+        if(rows&&rows.length){
+          // 1건만 반환되면 집계값(시군구 전체합)일 가능성 — 더 많은 데이터 기대
+          if(rows.length>1){ arr=rows; break; }
+          // 1건이라도 일단 저장해두고 더 좋은 결과 탐색 계속
+          if(!arr) arr=rows;
+        }
+      }catch(e){ console.warn('[읍면동]',wiwNm,e.message); }
+    }
+    if(arr&&arr.length>1) break;
+  }
+
+  if(!arr||!arr.length) return [];
+
+  console.log('[읍면동] 총',arr.length,'건 | 필드:',Object.keys(arr[0]).slice(0,20).join(', '));
+  console.log('[읍면동] 첫 행 샘플:',JSON.stringify(arr[0]).slice(0,300));
+
+  // ── emdName 필드 여부 확인 ──
+  const hasEmdField = arr.some(r => String(r.emdName||'').trim());
+
+  // ── emdNm별 후보 votes 맵 ──
+  const emdMap = new Map(); // emdNm → { isTotal, cands: Map<name, {name,party,votes}> }
+
+  for(const row of arr){
+    let emdNm=String(row.emdName||'').trim();
+    if(!emdNm && !hasEmdField) emdNm=String(row.wiwName||row.sdName||'').trim();
+    if(!emdNm) continue;
+
+    const isSggTotal = emdNm===sggNm || emdNm===sggNm.replace(/시장$|군수$|구청장$/,'');
+
+    if(!emdMap.has(emdNm)) emdMap.set(emdNm, {isTotal:isSggTotal, cands:new Map()});
+    const bucket = emdMap.get(emdNm).cands;
+
+    for(let i=1;i<=50;i++){
+      const x=String(i).padStart(2,'0');
+      const nm=String(row[`hbj${x}`]||'').trim();
+      const votes=parseInt(row[`dugsu${x}`]||0);
+      if(!nm&&!votes) break;
+      if(isNaN(votes)||votes<0) continue;
+      if(bucket.has(nm)){
+        bucket.get(nm).votes+=votes;
+      } else {
+        bucket.set(nm,{name:nm, party:String(row[`jd${x}`]||'무소속').trim(), votes});
+      }
+    }
+  }
+
+  // ── emdMap → result 배열 변환 + pct 재계산 ──
+  const result=[];
+  emdMap.forEach(({isTotal, cands:bucket}, emdNm)=>{
+    if(bucket.size===0) return;
+    const cands=[...bucket.values()].sort((a,b)=>b.votes-a.votes);
+    const totalV=cands.reduce((s,c)=>s+c.votes,0)||1;
+    cands.forEach(c=>{ c.pct=+(c.votes/totalV*100).toFixed(1); });
+    result.push({emdNm, winner:cands[0].party, cands, isTotal});
+  });
+
+  // 합계 row 맨 앞 → 나머지 가나다순
+  result.sort((a,b)=>{
+    if(a.isTotal&&!b.isTotal) return -1;
+    if(!a.isTotal&&b.isTotal) return 1;
+    return a.emdNm.localeCompare(b.emdNm,'ko');
+  });
+
+  return result;
 }
 
 // ════════════════════════════════════════════
