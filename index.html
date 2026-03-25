@@ -2118,66 +2118,61 @@ async function exportToPhotopea(){
   try{
     const W=1920, H=1080;
     const isNational=!ST.selectedSido;
-    let regions=[];
+    const regionMap=new Map(); // name → {fill, pathArr:[]}
 
     if(isNational){
       // ── 전국 시도 뷰 ──
       const proj=d3.geoMercator().fitExtent([[40,40],[W-40,H-40]],ST.sidoGeo);
-      const path=d3.geoPath().projection(proj).digits(1);
+      const pathFn=d3.geoPath().projection(proj).digits(1);
       ST.sidoGeo.features.forEach(f=>{
         const nm=getSidoNameFromProps(f.properties);
         if(!nm)return;
-        const fill=_sidoFill(f.properties);
-        const d=path(f);
-        if(d)regions.push({name:nm,fill,d});
+        const fill=_sidoFill(f.properties)||'#111a30';
+        const d=pathFn(f);
+        if(!d)return;
+        if(regionMap.has(nm)) regionMap.get(nm).pathArr.push(d);
+        else regionMap.set(nm,{fill,pathArr:[d]});
       });
     }else{
       // ── 드릴다운: 선택된 시도의 시군구 ──
       const sido=ST.selectedSido;
-      const feats=ST.sigunguGeo.features.filter(f=>f.properties._sidoName===sido);
+      const feats=(ST.sigunguGeo?.features||[]).filter(f=>f.properties._sidoName===sido);
       if(!feats.length){alert('시군구 지도 데이터가 없습니다.');return;}
-      const geo={type:'FeatureCollection',features:feats};
-      const proj=d3.geoMercator().fitExtent([[60,60],[W-60,H-60]],geo);
-      const path=d3.geoPath().projection(proj).digits(1);
+      const proj=d3.geoMercator().fitExtent([[60,60],[W-60,H-60]],
+        {type:'FeatureCollection',features:feats});
+      const pathFn=d3.geoPath().projection(proj).digits(1);
       feats.forEach(f=>{
         const p=f.properties;
-        // adm_nm 우선 (예: "수원시 장안구"), 없으면 name
+        // ── 레이어 이름 결정 (툴팁과 동일 규칙) ──
         const rawNm=String(p.adm_nm||p.name||p.SIGUNGU_NM||'').trim()||extractSggName(p);
-        if(!rawNm)return;
-        const party=p._sggParty;
-        const fill=party?pc(party):(ST.data[sido]?pc(ST.data[sido].winner)+'66':'#222a40');
-        const d=path(f);
-        if(d)regions.push({name:rawNm,fill,d});
+        let nm;
+        if(p._mergedCity)      nm=p._mergedCity;                     // 수원시, 성남시...
+        else if(p._parentCity) nm=rawNm.split(/\s+/).pop()||rawNm;   // "진주시 수곡면" → "수곡면"
+        else                   nm=rawNm.split(/\s+/).pop()||rawNm;   // 마지막 단어
+        if(!nm)return;
+        const fill=p._sggParty?pc(p._sggParty):(ST.data[sido]?pc(ST.data[sido].winner)+'66':'#222a40');
+        const d=pathFn(f);
+        if(!d)return;
+        // 동일 이름 feature(통합시 구역 등)는 path 합산 → 하나의 레이어로
+        if(regionMap.has(nm)) regionMap.get(nm).pathArr.push(d);
+        else regionMap.set(nm,{fill,pathArr:[d]});
       });
     }
 
-    if(!regions.length){alert('내보낼 지역 데이터가 없습니다.');return;}
-
-    // ── 중복 이름 처리 (동일 이름 feature에 순번 부여) ──
-    const nameCnt={};
-    regions.forEach(r=>{nameCnt[r.name]=(nameCnt[r.name]||0)+1;});
-    const nameSeen={};
-    regions=regions.map(r=>{
-      if(nameCnt[r.name]>1){
-        nameSeen[r.name]=(nameSeen[r.name]||0)+1;
-        if(nameSeen[r.name]>1) return{...r,name:`${r.name} (${nameSeen[r.name]})`};
-      }
-      return r;
-    });
+    if(!regionMap.size){alert('내보낼 지역 데이터가 없습니다.');return;}
 
     // ── 가나다 정렬 ──
-    regions.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+    const regions=[...regionMap.entries()]
+      .map(([name,v])=>({name,fill:v.fill,d:v.pathArr.join(' ')}))
+      .sort((a,b)=>a.name.localeCompare(b.name,'ko'));
 
     // ── SVG 빌드 ──
-    // Photopea 레이어 패널: 마지막 SVG 요소 = 최상단 레이어
-    // 가나다 순서로 상단→하단 레이어 배치 → SVG는 역순(하→가)으로
-    const rev=[...regions].reverse();
-
-    // 안전한 ASCII id 사용 (공백·특수문자 회피), 실제 이름은 postMessage 스크립트로 rename
+    // Photopea: SVG 마지막 요소 = 레이어 패널 최상단
+    // → 가나다 첫 번째('가')가 최상단이 되려면 SVG에서 맨 마지막에 배치
+    const rev=[...regions].reverse(); // SVG 순서: 하→가  (PSD 패널: 가 상단)
     const pathLines=rev.map((r,i)=>
       `  <path id="pp_r${i}" fill="${r.fill}" stroke="none" d="${r.d}"/>`
     );
-
     const svgStr=[
       `<?xml version="1.0" encoding="UTF-8"?>`,
       `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
@@ -2186,23 +2181,27 @@ async function exportToPhotopea(){
       `</svg>`
     ].join('\n');
 
-    // ── Photopea 레이어 rename 스크립트 ──
-    // pp_r0 → rev[0].name, pp_r1 → rev[1].name, ...
-    const nameMap=JSON.stringify(
-      Object.fromEntries([['pp_bg','배경'],...rev.map((r,i)=>[`pp_r${i}`,r.name])])
+    // ── rename + saveToOE 스크립트 ──
+    // step2에서 raw 문자열로 전송됨
+    const nameMap=Object.fromEntries(
+      [['pp_bg','배경'],...rev.map((r,i)=>[`pp_r${i}`,r.name])]
     );
+    const docTitle=isNational
+      ?'전국'
+      :ST.selectedSido.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
+
     const renameScript=`(function(){
-  try{
-    var nameMap=${nameMap};
-    function walk(layers){
-      for(var i=0;i<layers.length;i++){
-        var ly=layers[i];
-        if(nameMap.hasOwnProperty(ly.name)) ly.name=nameMap[ly.name];
-        if(ly.layers&&ly.layers.length>0) walk(ly.layers);
-      }
+  var m=${JSON.stringify(nameMap)};
+  function walk(ls){
+    for(var i=0;i<ls.length;i++){
+      var l=ls[i];
+      if(m.hasOwnProperty(l.name)) l.name=m[l.name];
+      if(l.layers&&l.layers.length) walk(l.layers);
     }
-    walk(app.activeDocument.layers);
-  }catch(e){alert('레이어 이름 변경 오류: '+e.message);}
+  }
+  try{ walk(app.activeDocument.layers); }catch(e){}
+  try{ app.activeDocument.title=${JSON.stringify(docTitle)}; }catch(e){}
+  app.activeDocument.saveToOE("psd");
 })();`;
 
     const label=isNational
@@ -2210,54 +2209,91 @@ async function exportToPhotopea(){
       :ST.selectedSido.replace(/특별자치도$|특별자치시$|특별시$|광역시$/,'');
     const filename=`KBS_선거지도_${label}.psd`;
 
-    if(btn)btn.textContent='⏳ Photopea 로딩 중...';
-    _openInPhotopea(svgStr,renameScript,filename);
+    console.log(`[PSD] 레이어 ${regions.length}개, SVG ${(svgStr.length/1024).toFixed(0)}KB`);
+    if(btn)btn.textContent=`⏳ Photopea 로딩 중... (${regions.length}개 레이어)`;
+    _openInPhotopea(svgStr,renameScript,filename,btn,origTxt);
 
   }catch(e){
     console.error('[PSD export]',e);
-    alert('내보내기 중 오류가 발생했습니다:\n'+e.message);
-  }finally{
-    setTimeout(()=>{if(btn){btn.textContent=origTxt;btn.disabled=false;}},3000);
+    alert('내보내기 중 오류:\n'+e.message);
+    if(btn){btn.textContent=origTxt;btn.disabled=false;}
   }
 }
 
-function _openInPhotopea(svgStr, renameScript, filename){
+function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
+  // ════════════════════════════════════════════
+  // Photopea Live Messaging API (정확한 사용법)
+  //  - Photopea 준비 완료 시 → "done" 문자열 전송
+  //  - 파일 전송: raw ArrayBuffer 직접 postMessage
+  //  - 스크립트 실행: raw 문자열 직접 postMessage
+  //  - saveToOE("psd") → opener로 PSD ArrayBuffer 전송
+  // ════════════════════════════════════════════
+  const restore=()=>{if(btn){btn.textContent=origTxt;btn.disabled=false;}};
+
+  const svgBuf=new TextEncoder().encode(svgStr).buffer; // ArrayBuffer
+  let step=0;
+  let finished=false;
+
   const ppWin=window.open('https://www.photopea.com','_blank');
   if(!ppWin){
-    alert('팝업이 차단되어 있습니다.\n브라우저 주소창 우측의 팝업 허용 버튼을 클릭한 후 다시 시도해주세요.');
-    return;
+    alert('팝업이 차단되어 있습니다.\n주소창 우측의 팝업 허용 버튼을 클릭 후 다시 시도해주세요.');
+    restore(); return;
   }
 
-  const buf=new TextEncoder().encode(svgStr).buffer;
-  let sent=false;
-
   const handler=e=>{
-    if(e.source!==ppWin||sent)return;
-    if(e.data==='ready'){
-      sent=true;
+    if(finished||e.source!==ppWin) return;
+
+    // ── "done" = Photopea 처리 완료 신호 ──
+    if(e.data==='done'){
+      step++;
+      console.log('[PSD] done step='+step);
+
+      if(step===1){
+        // Photopea 초기화 완료 → SVG 파일을 raw ArrayBuffer로 전송
+        ppWin.postMessage(svgBuf,'*');
+        if(btn) btn.textContent='⏳ SVG 로딩 중...';
+
+      }else if(step===2){
+        // SVG 로드 완료 → 레이어 rename 스크립트 + saveToOE 를 raw 문자열로 전송
+        ppWin.postMessage(renameScript,'*');
+        if(btn) btn.textContent='⏳ PSD 생성 중...';
+
+      }else if(step===3){
+        // 스크립트 실행 완료 → 다음 메시지로 PSD ArrayBuffer가 옴
+        // (step이 더 오면 무시)
+      }
+      return;
+    }
+
+    // ── PSD ArrayBuffer 수신 (saveToOE("psd") 결과) ──
+    if(e.data instanceof ArrayBuffer && e.data.byteLength>1000){
+      finished=true;
       window.removeEventListener('message',handler);
+      clearTimeout(tid);
 
-      // 1단계: SVG 파일 로드
-      ppWin.postMessage({action:'load',file:buf},'*');
+      const blob=new Blob([e.data],{type:'application/octet-stream'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(a.href),8000);
 
-      // 2단계: 문서 제목 변경 (로드 완료 대기 4초)
-      setTimeout(()=>{
-        ppWin.postMessage({
-          action:'script',
-          source:`try{app.activeDocument.title=${JSON.stringify(filename)};}catch(e){}`
-        },'*');
-      },4000);
-
-      // 3단계: 레이어 이름 rename (5.5초 후, 로드+렌더 완전히 끝난 후)
-      setTimeout(()=>{
-        ppWin.postMessage({action:'script',source:renameScript},'*');
-      },5500);
+      restore();
+      console.log(`[PSD] ✅ ${filename} 다운로드 (${(e.data.byteLength/1024).toFixed(0)} KB)`);
+      // Photopea 창은 닫지 않음 — 사용자가 직접 편집/저장 가능
     }
   };
-
   window.addEventListener('message',handler);
-  // 2분 타임아웃 (느린 환경 대비)
-  setTimeout(()=>window.removeEventListener('message',handler),120000);
+
+  // ── 전체 타임아웃 3분 ──
+  const tid=setTimeout(()=>{
+    if(finished) return;
+    finished=true;
+    window.removeEventListener('message',handler);
+    restore();
+    console.warn('[PSD] 타임아웃');
+    alert('Photopea 응답 없음 (3분 초과).\nPhotopea 창에서 File → Save As → PSD 로 직접 저장해주세요.');
+  },180000);
 }
 
 // ════════════════════════════════════════════
