@@ -2221,48 +2221,52 @@ async function exportToPhotopea(){
 
 function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
   // ════════════════════════════════════════════
-  // Photopea URL Hash API (달력 생성기와 동일한 방식)
-  //  - SVG를 base64 dataURI로 변환
-  //  - JSON 설정을 URL hash로 전달: files + script
-  //  - script에서 saveToOE("psd") 호출
-  //  - postMessage로 PSD ArrayBuffer 수신 → 자동 다운로드
+  // 전략: URL 크기에 따라 자동 전환
+  //  ① 소형 SVG (< 150KB): URL hash → script 포함 → saveToOE PSD 수신
+  //  ② 대형 SVG (≥ 150KB): postMessage 3단계
+  //       open blank → "done" 수신 → ArrayBuffer 전송
+  //       → "done" 수신 → script 전송 → PSD ArrayBuffer 수신
+  // Mac 에서 URL hash 방식은 ~800KB URL이 되어 Photopea가 데이터를 못 받음
   // ════════════════════════════════════════════
   const restore=()=>{if(btn){btn.textContent=origTxt;btn.disabled=false;}};
 
-  // SVG → base64 dataURI
-  const b64=btoa(unescape(encodeURIComponent(svgStr)));
-  const dataUri='data:image/svg+xml;base64,'+b64;
-
-  const ppConfig={
-    files:[dataUri],
-    environment:{lang:'ko'},
-    script:renameScript
+  const cleanup=()=>{
+    window.removeEventListener('message',handler);
+    clearTimeout(tid);
+    clearTimeout(_doneTimer);
   };
 
-  const ppUrl='https://www.photopea.com/#'+encodeURIComponent(JSON.stringify(ppConfig));
-  const ppWin=window.open(ppUrl,'_blank');
-  if(!ppWin){
-    alert('팝업이 차단되어 있습니다.\n주소창 우측의 팝업 허용 버튼을 클릭 후 다시 시도해주세요.');
-    restore(); return;
-  }
-
-  // saveToOE("psd") 결과를 postMessage로 수신 → 자동 다운로드
-  // ⚠️ e.source 비교 금지: saveToOE ArrayBuffer는 Photopea 내부 iframe에서 오므로
-  //    ppWin 참조와 달라 두 번째 호출부터 매칭 실패 → e.origin 으로 비교
   let finished=false;
   let _doneTimer=null;
+  let _step=0; // postMessage 방식 단계 추적
+  let ppWin=null;
 
-  const cleanup=()=>{window.removeEventListener('message',handler);clearTimeout(tid);clearTimeout(_doneTimer);};
-
+  // ── 공통 message handler ──
   const handler=e=>{
     if(finished) return;
     if(e.origin!=='https://www.photopea.com') return;
 
-    // "done" = 스크립트 실행 완료. ArrayBuffer가 곧 오거나 이미 왔을 수 있음
-    // 3초 후에도 ArrayBuffer가 안 오면 버튼 복원 (saveToOE 없이 끝난 경우 대비)
     if(e.data==='done'){
-      clearTimeout(_doneTimer);
-      _doneTimer=setTimeout(()=>{if(!finished){cleanup();restore();}},3000);
+      _step++;
+      console.log('[PSD] done step='+_step);
+
+      if(_step===1){
+        // Photopea 초기화 완료 → SVG ArrayBuffer 전송
+        const buf=new TextEncoder().encode(svgStr).buffer;
+        ppWin.postMessage(buf,'*',[buf]);
+        if(btn) btn.textContent='⏳ SVG 업로드 중...';
+
+      }else if(_step===2){
+        // SVG 로드 완료 → rename+saveToOE 스크립트 전송
+        ppWin.postMessage(renameScript,'*');
+        if(btn) btn.textContent='⏳ PSD 변환 중...';
+
+      }else if(_step>=3){
+        // 스크립트 실행 완료. saveToOE가 ArrayBuffer를 곧 보냄.
+        // 5초 후에도 안 오면 버튼 복원(오류 대비)
+        clearTimeout(_doneTimer);
+        _doneTimer=setTimeout(()=>{if(!finished){cleanup();restore();}},5000);
+      }
       return;
     }
 
@@ -2282,13 +2286,36 @@ function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
   };
   window.addEventListener('message',handler);
 
-  // 최대 60초 대기 후 강제 복원
+  // 2분 타임아웃 (느린 네트워크 대비)
   const tid=setTimeout(()=>{
     if(finished) return;
-    cleanup();
-    restore();
-    console.warn('[PSD] 60초 타임아웃 — Photopea에서 File › Save As › PSD로 직접 저장 가능');
-  },60000);
+    cleanup(); restore();
+    console.warn('[PSD] 타임아웃');
+  },120000);
+
+  // ── 방식 선택 ──
+  const svgBytes=new TextEncoder().encode(svgStr).byteLength;
+  const USE_URL_HASH=svgBytes<150*1024; // 150KB 미만만 URL hash 사용
+
+  if(USE_URL_HASH){
+    // ① URL hash 방식 (소형 전국 시도 뷰 등)
+    console.log('[PSD] URL hash 방식 ('+Math.round(svgBytes/1024)+'KB)');
+    const b64=btoa(unescape(encodeURIComponent(svgStr)));
+    const ppConfig={
+      files:['data:image/svg+xml;base64,'+b64],
+      environment:{lang:'ko'},
+      script:renameScript
+    };
+    ppWin=window.open('https://www.photopea.com/#'+encodeURIComponent(JSON.stringify(ppConfig)),'_blank');
+    if(!ppWin){alert('팝업이 차단되어 있습니다.\n주소창 우측의 팝업 허용 버튼을 클릭 후 다시 시도해주세요.');cleanup();restore();return;}
+
+  }else{
+    // ② postMessage 방식 (대형 시군구 뷰 - Mac 포함 모든 환경에서 안전)
+    console.log('[PSD] postMessage 방식 ('+Math.round(svgBytes/1024)+'KB)');
+    ppWin=window.open('https://www.photopea.com','_blank');
+    if(!ppWin){alert('팝업이 차단되어 있습니다.\n주소창 우측의 팝업 허용 버튼을 클릭 후 다시 시도해주세요.');cleanup();restore();return;}
+    // Photopea가 "done" 보내면 handler에서 단계별 처리
+  }
 }
 
 // ════════════════════════════════════════════
