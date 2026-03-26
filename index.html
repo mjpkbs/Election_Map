@@ -2247,29 +2247,13 @@ function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
   }
 
   // saveToOE("psd") 결과를 postMessage로 수신 → 자동 다운로드
-  // ⚠️ e.source 비교 금지: saveToOE ArrayBuffer는 Photopea 내부 iframe에서 오므로
-  //    ppWin 참조와 달라 두 번째 호출부터 매칭 실패 → e.origin 으로 비교
   let finished=false;
-  let _doneTimer=null;
-
-  const cleanup=()=>{window.removeEventListener('message',handler);clearTimeout(tid);clearTimeout(_doneTimer);};
-
   const handler=e=>{
-    if(finished) return;
-    if(e.origin!=='https://www.photopea.com') return;
-
-    // "done" = 스크립트 실행 완료. ArrayBuffer가 곧 오거나 이미 왔을 수 있음
-    // 3초 후에도 ArrayBuffer가 안 오면 버튼 복원 (saveToOE 없이 끝난 경우 대비)
-    if(e.data==='done'){
-      clearTimeout(_doneTimer);
-      _doneTimer=setTimeout(()=>{if(!finished){cleanup();restore();}},3000);
-      return;
-    }
-
-    // PSD ArrayBuffer 수신 → 다운로드
+    if(finished||e.source!==ppWin) return;
     if(e.data instanceof ArrayBuffer && e.data.byteLength>1000){
       finished=true;
-      cleanup();
+      window.removeEventListener('message',handler);
+      clearTimeout(tid);
       const blob=new Blob([e.data],{type:'application/octet-stream'});
       const a=document.createElement('a');
       a.href=URL.createObjectURL(blob);
@@ -2281,14 +2265,10 @@ function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
     }
   };
   window.addEventListener('message',handler);
-
-  // 최대 60초 대기 후 강제 복원
   const tid=setTimeout(()=>{
-    if(finished) return;
-    cleanup();
+    window.removeEventListener('message',handler);
     restore();
-    console.warn('[PSD] 60초 타임아웃 — Photopea에서 File › Save As › PSD로 직접 저장 가능');
-  },60000);
+  },300000);
 }
 
 // ════════════════════════════════════════════
