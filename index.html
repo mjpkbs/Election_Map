@@ -2219,7 +2219,7 @@ async function exportToPhotopea(){
   }
 }
 
-function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
+function _openInPhotopea_UNUSED(svgStr, renameScript, filename, btn, origTxt){
   // ════════════════════════════════════════════
   // 전략: URL hash + base64 data URI
   //   SVG → base64 data URI → Photopea config files[]에 포함
@@ -2279,6 +2279,31 @@ function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
     clearTimeout(tid);
     restore();
   }
+}
+
+function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
+  // SVG → base64 data URI → URL hash 방식으로 Photopea 열기
+  // script 자동 실행 후 Photopea 내부에서 PSD 저장
+  // 버튼은 창이 열리는 즉시 복원 (postMessage 응답 기다리지 않음)
+  const restore=()=>{if(btn){btn.textContent=origTxt;btn.disabled=false;}};
+  const svgBytes=new TextEncoder().encode(svgStr).byteLength;
+  console.log('[PSD] URL hash 방식 ('+Math.round(svgBytes/1024)+'KB)');
+
+  const b64=btoa(unescape(encodeURIComponent(svgStr)));
+  const ppConfig={
+    files:['data:image/svg+xml;base64,'+b64],
+    environment:{lang:'ko'},
+    script:renameScript
+  };
+  const ppUrl='https://www.photopea.com/#'+encodeURIComponent(JSON.stringify(ppConfig));
+  const ppWin=window.open(ppUrl,'_blank');
+
+  if(!ppWin){
+    alert('팝업이 차단되어 있습니다.\n주소창 우측의 팝업 허용 버튼을 클릭 후 다시 시도해주세요.');
+  }
+  // 창 열린 직후 버튼 복원 (PSD 저장은 Photopea 창 안에서 자동 처리)
+  restore();
+  console.log('[PSD] Photopea 창 열림 → 버튼 복원');
 }
 
 // ════════════════════════════════════════════
