@@ -2221,60 +2221,26 @@ async function exportToPhotopea(){
 
 function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
   // ════════════════════════════════════════════
-  // 전략: postMessage 3단계 (URL hash 방식은 SVG 크기에 무관하게 타임아웃 발생)
-  //   open blank → "done" 수신 → ArrayBuffer 전송
-  //   → "done" 수신 → script 전송 → PSD ArrayBuffer 수신
+  // 전략: URL hash + base64 data URI
+  //   SVG → base64 data URI → Photopea config files[]에 포함
+  //   script 자동 실행 → saveToOE("psd") → PSD ArrayBuffer postMessage로 수신
+  //   "done" 핸드셰이크 불필요 (postMessage blank open 방식은 Photopea가 done을 안 보냄)
   // ════════════════════════════════════════════
   const restore=()=>{if(btn){btn.textContent=origTxt;btn.disabled=false;}};
-
-  const cleanup=()=>{
-    window.removeEventListener('message',handler);
-    clearTimeout(tid);
-    clearTimeout(_doneTimer);
-  };
+  const svgBytes=new TextEncoder().encode(svgStr).byteLength;
+  console.log('[PSD] URL hash 방식 ('+Math.round(svgBytes/1024)+'KB)');
 
   let finished=false;
-  let _doneTimer=null;
-  let _step=0; // postMessage 방식 단계 추적
-  let ppWin=null;
 
-  // ── postMessage 방식으로 통일 (URL hash는 SVG가 크면 Photopea가 데이터를 못 받아 타임아웃) ──
-  const svgBytes=new TextEncoder().encode(svgStr).byteLength;
-  console.log('[PSD] postMessage 방식 ('+Math.round(svgBytes/1024)+'KB)');
-
-  // ── message handler ──
+  // PSD ArrayBuffer만 기다림 (saveToOE가 자동으로 보내줌)
   const handler=e=>{
     if(finished) return;
     if(e.origin!=='https://www.photopea.com') return;
-
-    if(e.data==='done'){
-      _step++;
-      console.log('[PSD] done step='+_step);
-
-      if(_step===1){
-        // Photopea 초기화 완료 → SVG ArrayBuffer 전송
-        const buf=new TextEncoder().encode(svgStr).buffer;
-        ppWin.postMessage(buf,'*',[buf]);
-        if(btn) btn.textContent='⏳ SVG 업로드 중...';
-
-      }else if(_step===2){
-        // SVG 로드 완료 → rename+saveToOE 스크립트 전송
-        ppWin.postMessage(renameScript,'*');
-        if(btn) btn.textContent='⏳ PSD 변환 중...';
-
-      }else if(_step>=3){
-        // 스크립트 실행 완료. saveToOE가 ArrayBuffer를 곧 보냄.
-        // 5초 후에도 안 오면 버튼 복원(오류 대비)
-        clearTimeout(_doneTimer);
-        _doneTimer=setTimeout(()=>{if(!finished){cleanup();restore();}},5000);
-      }
-      return;
-    }
-
-    // PSD ArrayBuffer 수신 → 다운로드
+    if(e.data==='done') return; // Photopea 내부 신호, 무시
     if(e.data instanceof ArrayBuffer && e.data.byteLength>1000){
       finished=true;
-      cleanup();
+      window.removeEventListener('message',handler);
+      clearTimeout(tid);
       const blob=new Blob([e.data],{type:'application/octet-stream'});
       const a=document.createElement('a');
       a.href=URL.createObjectURL(blob);
@@ -2287,16 +2253,32 @@ function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
   };
   window.addEventListener('message',handler);
 
-  // 2분 타임아웃 (느린 네트워크 대비)
+  // 3분 타임아웃
   const tid=setTimeout(()=>{
     if(finished) return;
-    cleanup(); restore();
+    window.removeEventListener('message',handler);
+    restore();
     console.warn('[PSD] 타임아웃');
-  },120000);
+  },180000);
 
-  ppWin=window.open('https://www.photopea.com','_blank');
-  if(!ppWin){alert('팝업이 차단되어 있습니다.\n주소창 우측의 팝업 허용 버튼을 클릭 후 다시 시도해주세요.');cleanup();restore();return;}
-  // Photopea가 "done" 보내면 handler에서 단계별 처리
+  // SVG → base64 data URI
+  const b64=btoa(unescape(encodeURIComponent(svgStr)));
+  const dataUri='data:image/svg+xml;base64,'+b64;
+
+  const ppConfig={
+    files:[dataUri],
+    environment:{lang:'ko'},
+    script:renameScript
+  };
+
+  const ppUrl='https://www.photopea.com/#'+encodeURIComponent(JSON.stringify(ppConfig));
+  const ppWin=window.open(ppUrl,'_blank');
+  if(!ppWin){
+    alert('팝업이 차단되어 있습니다.\n주소창 우측의 팝업 허용 버튼을 클릭 후 다시 시도해주세요.');
+    window.removeEventListener('message',handler);
+    clearTimeout(tid);
+    restore();
+  }
 }
 
 // ════════════════════════════════════════════
