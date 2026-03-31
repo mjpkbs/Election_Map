@@ -2241,12 +2241,23 @@ function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
   let _step=0; // postMessage 방식 단계 추적
   let ppWin=null;
 
+  // ── 방식 선택 (handler 등록 전에 결정) ──
+  const svgBytes=new TextEncoder().encode(svgStr).byteLength;
+  const USE_URL_HASH=svgBytes<150*1024; // 150KB 미만만 URL hash 사용
+
   // ── 공통 message handler ──
   const handler=e=>{
     if(finished) return;
     if(e.origin!=='https://www.photopea.com') return;
 
     if(e.data==='done'){
+      if(USE_URL_HASH){
+        // URL hash 방식: SVG + script가 URL에 내장되어 자동 실행됨
+        // "done"은 Photopea 초기화 신호이므로 무시 → PSD ArrayBuffer만 기다림
+        console.log('[PSD] done 수신 (URL hash 방식, 무시)');
+        return;
+      }
+      // postMessage 방식 단계별 처리
       _step++;
       console.log('[PSD] done step='+_step);
 
@@ -2292,10 +2303,6 @@ function _openInPhotopea(svgStr, renameScript, filename, btn, origTxt){
     cleanup(); restore();
     console.warn('[PSD] 타임아웃');
   },120000);
-
-  // ── 방식 선택 ──
-  const svgBytes=new TextEncoder().encode(svgStr).byteLength;
-  const USE_URL_HASH=svgBytes<150*1024; // 150KB 미만만 URL hash 사용
 
   if(USE_URL_HASH){
     // ① URL hash 방식 (소형 전국 시도 뷰 등)
